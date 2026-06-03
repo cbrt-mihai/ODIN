@@ -20,6 +20,10 @@
 # production
 /build
 
+# local investigation data
+/data/*
+!/data/.gitkeep
+
 # misc
 .DS_Store
 *.pem

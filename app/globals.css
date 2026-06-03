@@ -1,8 +1,12 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #09090b;
+  --foreground: #fafafa;
+  --card: #18181b;
+  --border: #27272a;
+  --muted: #71717a;
+  --accent: #3b82f6;
 }
 
 @theme inline {
@@ -12,15 +16,80 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+::selection {
+  background: rgb(59 130 246 / 0.35);
+  color: var(--foreground);
+}
+
+/* Shared interactive surfaces */
+.interactive-card {
+  @apply transition-all duration-200 ease-out;
+}
+
+.interactive-card:hover {
+  @apply border-zinc-700/80;
+}
+
+/* Page section rhythm */
+.page-section {
+  @apply space-y-6;
+}
+
+/* Focus ring for keyboard users */
+:focus-visible {
+  outline: 2px solid rgb(59 130 246 / 0.55);
+  outline-offset: 2px;
+}
+
+.prose-surface {
+  @apply text-zinc-200 leading-relaxed;
+}
+
+.prose-surface a {
+  @apply text-blue-400 underline-offset-2 hover:text-blue-300 hover:underline;
+}
+
+.prose-surface h1,
+.prose-surface h2,
+.prose-surface h3 {
+  @apply text-zinc-100 font-semibold mt-6 mb-3;
+}
+
+.prose-surface h1 {
+  @apply text-2xl;
+}
+
+.prose-surface h2 {
+  @apply text-xl;
+}
+
+.prose-surface p {
+  @apply mb-4;
+}
+
+.prose-surface ul,
+.prose-surface ol {
+  @apply mb-4 ml-6 list-disc space-y-1;
+}
+
+.prose-surface code {
+  @apply rounded bg-zinc-800 px-1.5 py-0.5 text-sm font-mono text-zinc-300;
+}
+
+.prose-surface pre {
+  @apply mb-4 overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-950 p-4;
+}
+
+.prose-surface blockquote {
+  @apply border-l-2 border-zinc-600 pl-4 italic text-zinc-400;
 }
