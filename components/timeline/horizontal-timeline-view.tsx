@@ -29,14 +29,12 @@ export function HorizontalTimelineView({
 
   return (
     <div className={className}>
-      <div className="max-w-full overflow-x-auto overflow-y-hidden rounded-lg border border-zinc-800 bg-zinc-950">
+      <div className="max-w-full overflow-x-auto overflow-y-visible rounded-lg border border-zinc-800 bg-zinc-950">
         <div
           className="relative pb-10 pt-3"
           style={{
             height: `${trackHeightRem}rem`,
             minWidth: trackMinWidthPx,
-            paddingLeft: `${inset}rem`,
-            paddingRight: `${inset}rem`,
           }}
         >
           <div

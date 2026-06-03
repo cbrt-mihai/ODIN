@@ -245,6 +245,8 @@ export interface Group {
   /** Other groups related to this roster or investigation thread. */
   linkedGroupIds?: string[];
   tags?: string[];
+  /** When true, hidden from default lists and search until explicitly included. */
+  archived?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -277,6 +279,8 @@ export interface Entity {
   attachments: Attachment[];
   events: TimelineEvent[];
   profileImage?: ProfileImage;
+  /** When true, hidden from default lists and search until explicitly included. */
+  archived?: boolean;
   createdAt: string;
   updatedAt: string;
 }

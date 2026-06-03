@@ -18,6 +18,8 @@ import {
   groupFilterDefaults,
   filterAndSortGroups,
 } from "@/lib/list-filter/groups";
+import { ARCHIVE_FILTER_OPTIONS, isGroupArchived } from "@/lib/archive/status";
+import { ArchivedBadge } from "@/components/archive/archived-badge";
 import type { Group } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 
@@ -43,6 +45,16 @@ export function GroupsIndex({ groups }: { groups: Group[] }) {
         onClear={clearFilters}
         searchPlaceholder="Search title, description, tags…"
         sortOptions={[...GROUP_SORT_OPTIONS]}
+        filterSelects={[
+          {
+            id: "archived",
+            label: "Archive",
+            options: ARCHIVE_FILTER_OPTIONS.map((o) => ({
+              value: o.value,
+              label: o.label,
+            })),
+          },
+        ]}
         tagFilter={{ placeholder: "team, suspects" }}
         resultCount={filtered.length}
         totalCount={groups.length}
@@ -117,7 +129,10 @@ export function GroupsIndex({ groups }: { groups: Group[] }) {
                     size="sm"
                   />
                   <div className="min-w-0">
-                    <span className="font-medium text-zinc-100">{g.title}</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-zinc-100">{g.title}</span>
+                      {isGroupArchived(g) && <ArchivedBadge />}
+                    </div>
                     {g.description && (
                       <p className="truncate text-xs text-zinc-500">
                         {g.description}

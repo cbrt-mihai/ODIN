@@ -40,6 +40,7 @@ export function useListFilters(defaults: ListFilterState = {}) {
     if (state.tags?.trim()) n++;
     if (state.type && state.type !== "all") n++;
     if (state.status && state.status !== "all") n++;
+    if (state.archived && state.archived !== "exclude") n++;
     if (state.kind && state.kind !== "all") n++;
     if (state.category?.trim()) n++;
     if (state.minEntities?.trim()) n++;

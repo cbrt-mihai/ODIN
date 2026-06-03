@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { cache } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { logActivity } from "@/lib/storage/activity";
@@ -363,6 +364,24 @@ export async function patchEntityAttachmentFolders(
   entity.updatedAt = new Date().toISOString();
   await saveEntity(normalizeEntity(entity));
   return entity;
+}
+
+export async function setEntityArchived(id: string, archived: boolean) {
+  const entity = await getEntity(id);
+  if (!entity) throw new Error("Entity not found");
+  entity.archived = archived;
+  entity.updatedAt = new Date().toISOString();
+  await saveEntity(normalizeEntity(entity));
+  await logActivity({
+    action: "update",
+    targetType: "entity",
+    targetId: id,
+    summary: archived
+      ? `Archived entity "${entity.displayName}"`
+      : `Unarchived entity "${entity.displayName}"`,
+  });
+  revalidatePath("/entities");
+  revalidatePath(`/entities/${id}`);
 }
 
 export async function deleteEntity(id: string) {

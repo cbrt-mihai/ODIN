@@ -1,6 +1,7 @@
 import React from "react";
 import { Document, Page, renderToBuffer } from "@react-pdf/renderer";
 import { EntityPdfPages, pdfStyles } from "@/lib/reports/pdf-blocks";
+import { loadEntityPdfImages } from "@/lib/reports/media";
 import type { Entity, Relationship } from "@/lib/types";
 import { getSettings } from "@/lib/storage";
 import { filterReportFields } from "./shared";
@@ -9,6 +10,7 @@ export async function renderEntityReportPdf(
   entity: Entity,
   relationships: Relationship[],
   linked: Entity[],
+  pdfImages?: Map<string, string>,
 ) {
   const settings = await getSettings();
   const confLabel = (id: string) =>
@@ -18,6 +20,7 @@ export async function renderEntityReportPdf(
     settings.confidenceTypes,
     true,
   );
+  const images = pdfImages ?? (await loadEntityPdfImages(entity));
 
   return renderToBuffer(
     <Document>
@@ -31,6 +34,7 @@ export async function renderEntityReportPdf(
           confLabel={confLabel}
           relationshipTypes={settings.relationshipTypes}
           confidenceTypes={settings.confidenceTypes}
+          pdfImages={images}
         />
       </Page>
     </Document>,

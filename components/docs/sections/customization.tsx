@@ -9,11 +9,13 @@ export function CustomizationDoc() {
         here changes investigation data unless noted.
       </p>
 
-      <h3>Wide workspace</h3>
+      <h3>Workspace width</h3>
       <p>
-        On desktop, use <strong>Wide workspace</strong> at the top of the main
-        content area to expand the page beyond the default max width. Your choice
-        is stored in the browser.
+        On desktop, use the width control at the top of the main content area to
+        cycle through <strong>Standard width</strong>,{" "}
+        <strong>Wide workspace</strong>, and{" "}
+        <strong>Widest workspace</strong>. Widest uses nearly the full main panel
+        with minimal side padding. Your choice is stored in the browser.
       </p>
 
       <h3>Panel layout (entity &amp; case pages)</h3>

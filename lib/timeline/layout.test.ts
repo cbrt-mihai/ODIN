@@ -2,13 +2,17 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   buildDisplayLaneHeightsRem,
+  computeTimelineReportCanvas,
   estimateTimelineCardHeightRem,
   layoutTimelineEvents,
+  layoutTimelineReportEvents,
+  pointEventLeftPx,
   timelineContentWidthPx,
   timelineEventPositionStyle,
   TIMELINE_LANE_BASE_HEIGHT_REM,
   TIMELINE_POINT_CARD_WIDTH_PX,
   TIMELINE_TRACK_EDGE_PADDING_PX,
+  TIMELINE_TRACK_SIDE_PADDING_PX,
 } from "./layout";
 
 describe("layoutTimelineEvents", () => {
@@ -56,6 +60,140 @@ describe("layoutTimelineEvents", () => {
     const end = layout.items.find((i) => i.id === "end")!;
     assert.ok(start.startPct < 5);
     assert.ok(end.startPct > 95);
+  });
+
+  it("computes report canvas wide enough for edge cards", () => {
+    const layout = layoutTimelineEvents([
+      {
+        id: "a",
+        occurredAt: "2026-05-16T16:47:00Z",
+        description: "Listed in matter NL-2025-0412 intake memo (staging access)",
+      },
+      {
+        id: "b",
+        occurredAt: "2026-05-22T16:47:00Z",
+        description: "Laura P. / Northline HR — cooperative, no adverse info",
+      },
+      {
+        id: "c",
+        occurredAt: "2026-05-23T16:47:00Z",
+        description:
+          "No outreach to subject until client signs revised letter",
+      },
+    ] as never);
+    assert.ok(layout);
+    const canvas = computeTimelineReportCanvas(
+      layout.items,
+      layout.trackMinWidthPx,
+    );
+    for (const item of layout.items) {
+      const left =
+        pointEventLeftPx(item.startPct, item.offsetPx, layout.trackMinWidthPx) +
+        canvas.shiftPx;
+      assert.ok(
+        left >= TIMELINE_TRACK_SIDE_PADDING_PX,
+        `${item.id} left edge should not clip`,
+      );
+      assert.ok(
+        left + TIMELINE_POINT_CARD_WIDTH_PX <= canvas.widthPx,
+        `${item.id} right edge should fit canvas`,
+      );
+    }
+  });
+
+  it("fits spaced events with descriptions without underflowing track height", () => {
+    const layout = layoutTimelineEvents([
+      {
+        id: "a",
+        occurredAt: "2026-05-16T16:47:00Z",
+        type: "other",
+        description: "Listed in matter NL-2025-0412 intake memo (staging access)",
+      },
+      {
+        id: "b",
+        occurredAt: "2026-05-22T16:47:00Z",
+        type: "contact",
+        description: "Laura P. / Northline HR — cooperative, no adverse info",
+      },
+      {
+        id: "c",
+        occurredAt: "2026-05-23T16:47:00Z",
+        type: "legal",
+        description:
+          "No outreach to subject until client signs revised letter",
+      },
+    ] as never);
+    assert.ok(layout);
+    assert.ok(layout.stackCount >= 1);
+    const maxDisplayLane = Math.max(
+      ...layout.items.map((i) => i.lane * layout.stackCount + i.stack),
+    );
+    const topCardBottom = layout.laneHeightsRem
+      .slice(0, maxDisplayLane)
+      .reduce((sum, h, idx, arr) => {
+        const gap = idx < arr.length - 1 ? 0.35 : 0;
+        return sum + h + gap;
+      }, 2.5);
+    const topCardHeight =
+      layout.laneHeightsRem[maxDisplayLane] ?? TIMELINE_LANE_BASE_HEIGHT_REM;
+    assert.ok(
+      layout.trackHeightRem >= topCardBottom + topCardHeight + 0.5,
+      "track should fit the tallest stacked card",
+    );
+  });
+});
+
+describe("layoutTimelineReportEvents", () => {
+  it("stacks cards vertically when horizontal spans would collide", () => {
+    const layout = layoutTimelineReportEvents([
+      {
+        id: "a",
+        occurredAt: "2026-05-16T16:47:00Z",
+        description: "Listed in matter NL-2025-0412 intake memo (staging access)",
+      },
+      {
+        id: "b",
+        occurredAt: "2026-05-17T16:47:00Z",
+        description: "CISO shared reentry paste",
+      },
+      {
+        id: "c",
+        occurredAt: "2026-05-18T16:47:00Z",
+        description: "Phishing kit Glass Desk",
+      },
+      {
+        id: "d",
+        occurredAt: "2026-05-22T16:47:00Z",
+        description: "Laura P. / Northline HR — cooperative, no adverse info",
+      },
+      {
+        id: "e",
+        occurredAt: "2026-05-22T17:47:00Z",
+        description: "HR call — Elena Vasquez",
+      },
+    ] as never);
+    assert.ok(layout);
+    assert.ok(layout.stackCount > 1, "should use multiple vertical rows");
+
+    const byRow = new Map<number, { left: number; right: number }[]>();
+    for (const item of layout.items) {
+      const left = pointEventLeftPx(
+        item.startPct,
+        item.offsetPx,
+        layout.trackMinWidthPx,
+      );
+      const right = left + TIMELINE_POINT_CARD_WIDTH_PX;
+      const row = item.stack;
+      const intervals = byRow.get(row) ?? [];
+      for (const other of intervals) {
+        assert.ok(
+          left >= other.right + 12 || right <= other.left - 12,
+          `row ${row} cards should not overlap horizontally`,
+        );
+      }
+      intervals.push({ left, right });
+      byRow.set(row, intervals);
+    }
   });
 });
 

@@ -16,8 +16,12 @@ import {
 } from "@/components/ui/select";
 import { ProfileAvatar } from "@/components/profile/profile-avatar";
 import { ProfileImageField } from "@/components/profile/profile-image-field";
-import { deleteCase, updateCase } from "@/lib/actions/cases";
+import { deleteCase, setCaseArchived, updateCase } from "@/lib/actions/cases";
 import type { Case, Entity } from "@/lib/types";
+import { ArchiveToggleButton } from "@/components/archive/archive-toggle-button";
+import { ArchivedBadge } from "@/components/archive/archived-badge";
+import { isCaseArchived } from "@/lib/archive/status";
+import { CaseStatusBadge } from "@/components/cases/case-status-badge";
 
 export function CaseEditor({
   caseData,
@@ -36,6 +40,8 @@ export function CaseEditor({
   const [profileImage, setProfileImage] = useState(caseData.profileImage);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const archived = isCaseArchived(caseData);
 
   async function save() {
     setSaving(true);
@@ -86,9 +92,24 @@ export function CaseEditor({
             ) : (
               <h1 className="text-2xl font-bold">{caseData.title}</h1>
             )}
+            {!editing && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <CaseStatusBadge status={caseData.status} />
+              </div>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap gap-2 shrink-0">
+          {!editing && caseData.status !== "closed" && (
+            <ArchiveToggleButton
+              archived={archived}
+              onToggle={async (next) => {
+                await setCaseArchived(caseData.id, next);
+                setStatus(next ? "archived" : "active");
+                router.refresh();
+              }}
+            />
+          )}
           {editing ? (
             <>
               <Button size="sm" onClick={save} disabled={saving}>
@@ -176,7 +197,14 @@ export function CaseEditor({
         </div>
       ) : (
         <>
-          <p className="text-sm capitalize text-zinc-400">{caseData.status}</p>
+          {archived && (
+            <div className="flex items-center gap-2">
+              <ArchivedBadge />
+              <span className="text-sm text-zinc-500">
+                This case is archived and hidden from default lists.
+              </span>
+            </div>
+          )}
           {caseData.description ? null : (
             <p className="text-sm text-zinc-500">No description.</p>
           )}

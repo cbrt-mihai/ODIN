@@ -1,4 +1,8 @@
 import {
+  isGroupArchived,
+  matchesArchiveFilter,
+} from "@/lib/archive/status";
+import {
   compareValues,
   matchesSearchQuery,
   parseTagsParam,
@@ -27,6 +31,7 @@ export function filterAndSortGroups(
     : undefined;
 
   let result = groups.filter((g) => {
+    if (!matchesArchiveFilter(isGroupArchived(g), state.archived)) return false;
     if (
       minEntities != null &&
       !Number.isNaN(minEntities) &&
@@ -72,6 +77,7 @@ export function groupFilterDefaults(
   overrides?: ListFilterState,
 ): ListFilterState {
   return {
+    archived: "exclude",
     sort: "updatedAt",
     dir: "desc",
     ...overrides,

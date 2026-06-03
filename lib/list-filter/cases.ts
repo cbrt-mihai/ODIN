@@ -1,4 +1,8 @@
 import {
+  isCaseArchived,
+  matchesArchiveFilter,
+} from "@/lib/archive/status";
+import {
   compareValues,
   matchesSearchQuery,
   parseTagsParam,
@@ -32,6 +36,7 @@ export function filterAndSortCases(
   const sort = state.sort ?? "updatedAt";
 
   let result = cases.filter((c) => {
+    if (!matchesArchiveFilter(isCaseArchived(c), state.archived)) return false;
     if (status !== "all" && c.status !== status) return false;
     if (
       tagFilter.length > 0 &&
@@ -72,6 +77,7 @@ export function caseFilterDefaults(
 ): ListFilterState {
   return {
     status: "all",
+    archived: "exclude",
     sort: "updatedAt",
     dir: "desc",
     ...overrides,

@@ -1,4 +1,4 @@
-import { TIMELINE_REPORT_STYLES } from "@/lib/reports/timeline-html";
+import { TIMELINE_REPORT_STYLES, TIMELINE_REPORT_SCRIPT } from "@/lib/reports/timeline-html";
 
 export const REPORT_BASE_STYLES = `
   :root { color-scheme: light; }
@@ -56,10 +56,43 @@ export const REPORT_BASE_STYLES = `
   .proof-list { margin: 0.5rem 0; padding-left: 1.1rem; }
   .proof-list li { margin-bottom: 0.35rem; }
   .mono { font-family: ui-monospace, monospace; font-size: 0.75rem; word-break: break-all; }
+  .gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1rem;
+    margin: 0.75rem 0 1.25rem;
+  }
+  .gallery-item {
+    border: 1px solid #e4e4e7;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+  }
+  .gallery-item img, .gallery-item video {
+    display: block;
+    width: 100%;
+    max-height: 220px;
+    object-fit: contain;
+    background: #f4f4f5;
+  }
+  .gallery-item figcaption {
+    padding: 0.55rem 0.65rem;
+    font-size: 0.78rem;
+    color: #52525b;
+  }
+  .profile-image {
+    max-width: 220px;
+    max-height: 220px;
+    border-radius: 8px;
+    border: 1px solid #e4e4e7;
+    margin: 0.5rem 0 1rem;
+    object-fit: contain;
+    background: #f4f4f5;
+  }
   a { color: #2563eb; }
   ${TIMELINE_REPORT_STYLES}
   @media print {
-    .timeline-wrap, .timeline-track, .timeline-inner { overflow: visible !important; }
+    .timeline-wrap, .timeline-track, .timeline-body-scroll, .timeline-axis-scroll, .timeline-canvas, .timeline-axis-canvas { overflow: visible !important; max-height: none !important; }
   }
 `;
 
@@ -74,6 +107,7 @@ export function reportDocumentShell(title: string, body: string) {
 </head>
 <body>
 ${body}
+<script>${TIMELINE_REPORT_SCRIPT}</script>
 </body>
 </html>`;
 }

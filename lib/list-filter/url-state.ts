@@ -26,7 +26,12 @@ export function parseListParams(
 export function buildListQuery(state: ListFilterState): string {
   const sp = new URLSearchParams();
   for (const [key, value] of Object.entries(state)) {
-    if (value && value !== "all" && value !== "") {
+    if (
+      value &&
+      value !== "all" &&
+      value !== "" &&
+      !(key === "archived" && value === "exclude")
+    ) {
       sp.set(key, value);
     }
   }

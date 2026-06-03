@@ -1,7 +1,14 @@
 import {
-  layoutTimelineEvents,
-  timelineEventPositionStyle,
-  TIMELINE_CONTENT_INSET_REM,
+  computeTimelineEventsAreaHeightRem,
+  computeTimelineReportCanvas,
+  displayLaneBottomRem,
+  layoutTimelineReportEvents,
+  timelineEventReportLeftPx,
+  timelineEventReportWidthPx,
+  timelineTickLeftPx,
+  TIMELINE_AXIS_HEIGHT_REM,
+  TIMELINE_TRACK_HORIZONTAL_INSET_PX,
+  timelineContentWidthPx,
 } from "@/lib/timeline/layout";
 import type { TimelineEvent } from "@/lib/types";
 
@@ -20,39 +27,85 @@ function formatWhen(ev: TimelineEvent) {
   return `${start} – ${end}`;
 }
 
+function formatTickLabel(ms: number, spanMs: number) {
+  const iso = new Date(ms).toISOString();
+  if (spanMs <= 2 * 86_400_000) return iso.slice(0, 16).replace("T", " ");
+  if (spanMs <= 90 * 86_400_000) return iso.slice(0, 10);
+  return iso.slice(0, 7);
+}
+
+function buildDateTicks(minMs: number, maxMs: number, count = 5) {
+  const span = maxMs - minMs || 1;
+  const ticks: { pct: number; label: string }[] = [];
+  for (let i = 0; i <= count; i++) {
+    const pct = (i / count) * 100;
+    const ms = minMs + (span * i) / count;
+    ticks.push({ pct, label: formatTickLabel(ms, span) });
+  }
+  return ticks;
+}
+
 export const TIMELINE_REPORT_STYLES = `
   .timeline-wrap { margin: 1rem 0 1.5rem; }
   .timeline-track {
-    position: relative;
-    margin: 0.5rem 0;
+    display: flex;
+    flex-direction: column;
+    max-width: 100%;
     border: 1px solid #e5e7eb;
     border-radius: 6px;
     background: #fafafa;
-    overflow-x: auto;
-    overflow-y: visible;
   }
-  .timeline-inner {
+  .timeline-body-scroll {
+    overflow: auto;
+    max-height: 24rem;
+    width: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
+  .timeline-axis-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    width: 100%;
+    flex-shrink: 0;
+    border-top: 1px solid #e5e7eb;
+    background: #fafafa;
+    scrollbar-width: none;
+  }
+  .timeline-axis-scroll::-webkit-scrollbar {
+    display: none;
+  }
+  .timeline-canvas,
+  .timeline-axis-canvas {
     position: relative;
-    padding: 0 ${TIMELINE_CONTENT_INSET_REM}rem 2.5rem;
+    box-sizing: border-box;
+  }
+  .timeline-events {
+    position: relative;
+    padding: 0.75rem 0 0;
+    box-sizing: border-box;
+    overflow: visible;
+  }
+  .timeline-footer {
+    position: relative;
+    padding: 0.35rem 0 0.55rem;
     box-sizing: border-box;
   }
   .timeline-axis {
-    position: absolute;
-    left: ${TIMELINE_CONTENT_INSET_REM}rem;
-    right: ${TIMELINE_CONTENT_INSET_REM}rem;
-    bottom: 1.25rem;
+    position: relative;
     height: 2px;
     background: #d4d4d8;
   }
-  .timeline-labels {
+  .timeline-ticks {
+    position: relative;
+    margin: 0.3rem 0 0;
+    height: 1.1rem;
+  }
+  .timeline-tick {
     position: absolute;
-    left: ${TIMELINE_CONTENT_INSET_REM}rem;
-    right: ${TIMELINE_CONTENT_INSET_REM}rem;
-    bottom: 0.25rem;
-    display: flex;
-    justify-content: space-between;
+    top: 0;
     font-size: 0.65rem;
     color: #71717a;
+    white-space: nowrap;
+    transform: translateX(-50%);
   }
   .timeline-event {
     position: absolute;
@@ -72,7 +125,16 @@ export const TIMELINE_REPORT_STYLES = `
   }
   .timeline-event .title { font-weight: 600; color: #18181b; }
   .timeline-event .meta { color: #71717a; margin-top: 0.15rem; }
-  .timeline-event .desc { color: #52525b; margin-top: 0.2rem; }
+  .timeline-event .desc {
+    color: #52525b;
+    margin-top: 0.2rem;
+    white-space: normal;
+    padding: 0;
+    background: transparent;
+    border: none;
+    font-size: inherit;
+    font-family: inherit;
+  }
   .timeline-list { font-size: 0.8rem; margin-top: 0.75rem; }
   .timeline-list table { width: 100%; border-collapse: collapse; }
   .timeline-list th, .timeline-list td {
@@ -83,10 +145,28 @@ export const TIMELINE_REPORT_STYLES = `
   }
   .timeline-list th { background: #f4f4f5; }
   @media print {
-    .timeline-track { overflow: visible; }
-    .timeline-inner { overflow: visible; }
-    .timeline-list { page-break-before: auto; }
+    .timeline-body-scroll, .timeline-axis-scroll { overflow: visible !important; max-height: none !important; }
+    .timeline-axis-scroll { border-top: none; }
   }
+`;
+
+export const TIMELINE_REPORT_SCRIPT = `
+(function () {
+  for (const track of document.querySelectorAll(".timeline-track")) {
+    const body = track.querySelector(".timeline-body-scroll");
+    const axis = track.querySelector(".timeline-axis-scroll");
+    if (!body || !axis) continue;
+    let syncing = false;
+    const sync = (from, to) => {
+      if (syncing) return;
+      syncing = true;
+      to.scrollLeft = from.scrollLeft;
+      syncing = false;
+    };
+    body.addEventListener("scroll", () => sync(body, axis), { passive: true });
+    axis.addEventListener("scroll", () => sync(axis, body), { passive: true });
+  }
+})();
 `;
 
 export function renderTimelineReportHtml<T extends TimelineEvent>(
@@ -98,25 +178,52 @@ export function renderTimelineReportHtml<T extends TimelineEvent>(
     return `<h2>${esc(title)}</h2><p>No events.</p>`;
   }
 
-  const layout = layoutTimelineEvents(events);
+  const layout = layoutTimelineReportEvents(events);
   if (!layout) {
     return `<h2>${esc(title)}</h2><p>No events.</p>`;
   }
 
-  const minLabel = new Date(layout.min).toISOString().slice(0, 10);
-  const maxLabel = new Date(layout.max).toISOString().slice(0, 10);
+  const { widthPx, shiftPx } = computeTimelineReportCanvas(
+    layout.items,
+    layout.trackMinWidthPx,
+  );
+  const eventsHeightRem = computeTimelineEventsAreaHeightRem(layout.laneHeightsRem);
+  const axisLeftPx = TIMELINE_TRACK_HORIZONTAL_INSET_PX + shiftPx;
+  const axisWidthPx = timelineContentWidthPx(layout.trackMinWidthPx);
+
+  const ticks = buildDateTicks(layout.min, layout.max);
+  const tickHtml = ticks
+    .map((tick) => {
+      const leftPx = timelineTickLeftPx(
+        tick.pct,
+        layout.trackMinWidthPx,
+        shiftPx,
+      );
+      return `<span class="timeline-tick" style="left:${leftPx}px">${esc(tick.label)}</span>`;
+    })
+    .join("");
 
   const markers = layout.items
     .map((ev) => {
-      const displayLane = ev.lane * layout.stackCount + ev.stack;
-      const pos = timelineEventPositionStyle(
+      const displayLane = ev.stack;
+      const leftPx = timelineEventReportLeftPx(
+        ev.startPct,
+        ev.offsetPx,
+        layout.trackMinWidthPx,
+        shiftPx,
+      );
+      const widthPx = timelineEventReportWidthPx(
         ev.startPct,
         ev.endPct,
-        displayLane,
-        layout.laneHeightsRem,
+        layout.trackMinWidthPx,
         ev.isRange,
-        ev.offsetPx,
       );
+      const bottomRem =
+        displayLaneBottomRem(
+          displayLane,
+          layout.laneHeightsRem,
+        ) - TIMELINE_AXIS_HEIGHT_REM;
+
       const source = options?.sourceLabel?.(ev);
       const meta = [formatWhen(ev), ev.type, source]
         .filter(Boolean)
@@ -124,11 +231,8 @@ export function renderTimelineReportHtml<T extends TimelineEvent>(
       const descHtml = ev.description
         ? `<div class="desc">${esc(ev.description)}</div>`
         : "";
-      const widthStyle = pos.width ? `width:${pos.width};` : "";
-      const marginStyle = pos.marginLeft
-        ? `margin-left:${pos.marginLeft};`
-        : "";
-      return `<div class="timeline-event${ev.isRange ? " range" : ""}" style="left:${pos.left};bottom:${pos.bottom};${widthStyle}${marginStyle}">
+
+      return `<div class="timeline-event${ev.isRange ? " range" : ""}" style="left:${leftPx}px;bottom:${bottomRem}rem;width:${widthPx}px">
         <div class="title">${esc(ev.title)}</div>
         <div class="meta">${esc(meta)}</div>
         ${descHtml}
@@ -153,10 +257,20 @@ export function renderTimelineReportHtml<T extends TimelineEvent>(
   return `<h2>${esc(title)}</h2>
   <div class="timeline-wrap">
     <div class="timeline-track">
-      <div class="timeline-inner" style="height:${layout.trackHeightRem}rem;min-width:${layout.trackMinWidthPx}px">
-        <div class="timeline-axis"></div>
-        <div class="timeline-labels"><span>${esc(minLabel)}</span><span>${esc(maxLabel)}</span></div>
-        ${markers}
+      <div class="timeline-body-scroll">
+        <div class="timeline-canvas" style="width:${widthPx}px">
+          <div class="timeline-events" style="height:${eventsHeightRem}rem">
+            ${markers}
+          </div>
+        </div>
+      </div>
+      <div class="timeline-axis-scroll">
+        <div class="timeline-axis-canvas" style="width:${widthPx}px">
+          <div class="timeline-footer" style="min-height:${TIMELINE_AXIS_HEIGHT_REM}rem">
+            <div class="timeline-axis" style="margin-left:${axisLeftPx}px;width:${axisWidthPx}px"></div>
+            <div class="timeline-ticks">${tickHtml}</div>
+          </div>
+        </div>
       </div>
     </div>
     <div class="timeline-list">

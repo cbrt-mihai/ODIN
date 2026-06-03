@@ -16,6 +16,7 @@ import type {
   Tool,
 } from "@/lib/types";
 import { filterReportFields } from "./shared";
+import { loadScopePdfImages } from "@/lib/reports/media";
 
 export async function renderCaseReportPdf(input: {
   caseData: Case;
@@ -27,6 +28,7 @@ export async function renderCaseReportPdf(input: {
   playbooks: Playbook[];
   allEntities: Entity[];
   settings: Pick<Settings, "confidenceTypes" | "relationshipTypes">;
+  pdfImages?: Map<string, string>;
 }) {
   const confLabel = (id: string) =>
     input.settings.confidenceTypes.find((c) => c.id === id)?.label ?? id;
@@ -40,6 +42,14 @@ export async function renderCaseReportPdf(input: {
     input.caseData.events,
     input.linked,
   );
+
+  const pdfImages =
+    input.pdfImages ??
+    (await loadScopePdfImages({
+      entities: input.linked,
+      caseProfile: input.caseData.profileImage,
+      caseId: input.caseData.id,
+    }));
 
   return renderToBuffer(
     <Document>
@@ -56,6 +66,7 @@ export async function renderCaseReportPdf(input: {
           playbooks={input.playbooks}
           tools={input.tools}
           resources={input.resources}
+          pdfImages={pdfImages}
         />
         <Text style={pdfStyles.h2}>Timeline</Text>
         {timeline.length === 0 ? (
@@ -87,6 +98,7 @@ export async function renderCaseReportPdf(input: {
               confLabel={confLabel}
               relationshipTypes={input.settings.relationshipTypes}
               confidenceTypes={input.settings.confidenceTypes}
+              pdfImages={pdfImages}
             />
           </Page>
         );

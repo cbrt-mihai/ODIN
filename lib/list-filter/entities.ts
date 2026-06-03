@@ -1,5 +1,9 @@
 import { entityFieldSearchBlob } from "@/lib/search/field-text";
 import {
+  isEntityArchived,
+  matchesArchiveFilter,
+} from "@/lib/archive/status";
+import {
   compareValues,
   matchesSearchQuery,
   parseTagsParam,
@@ -34,6 +38,7 @@ export function filterAndSortEntities(
   const sort = state.sort ?? "updatedAt";
 
   let result = entities.filter((e) => {
+    if (!matchesArchiveFilter(isEntityArchived(e), state.archived)) return false;
     if (type !== "all" && e.type !== type) return false;
     if (
       tagFilter.length > 0 &&
@@ -77,6 +82,7 @@ export function entityFilterDefaults(
 ): ListFilterState {
   return {
     type: "all",
+    archived: "exclude",
     sort: "updatedAt",
     dir: "desc",
     ...overrides,

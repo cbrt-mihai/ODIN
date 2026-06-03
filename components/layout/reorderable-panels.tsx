@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { LayoutGrid } from "lucide-react";
 import { SortableList } from "@/components/ui/sortable-list";
 import { Button } from "@/components/ui/button";
@@ -51,17 +51,19 @@ export function ReorderablePanels({
 
   const defaultOrder = useMemo(() => panels.map((p) => p.id), [panels]);
 
-  const [order, setOrder] = useState<string[]>(() => {
-    if (typeof window === "undefined") return defaultOrder;
-    return mergePanelOrder(scope, readPanelOrder(scope)).filter((id) =>
-      panelMap.has(id),
-    );
-  });
+  const [order, setOrder] = useState<string[]>(defaultOrder);
 
-  const [columnCount, setColumnCount] = useState<PanelColumnCount>(() =>
-    readPanelColumnCount(scope),
-  );
+  const [columnCount, setColumnCount] = useState<PanelColumnCount>(1);
   const [customize, setCustomize] = useState(false);
+
+  useEffect(() => {
+    setOrder(
+      mergePanelOrder(scope, readPanelOrder(scope)).filter((id) =>
+        panelMap.has(id),
+      ),
+    );
+    setColumnCount(readPanelColumnCount(scope));
+  }, [scope, panelMap]);
 
   const setColumns = useCallback(
     (count: PanelColumnCount) => {

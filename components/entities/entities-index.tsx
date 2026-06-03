@@ -20,6 +20,8 @@ import {
   entityTypeOptionsForSettings,
   filterAndSortEntities,
 } from "@/lib/list-filter/entities";
+import { ARCHIVE_FILTER_OPTIONS, isEntityArchived } from "@/lib/archive/status";
+import { ArchivedBadge } from "@/components/archive/archived-badge";
 import type { ListFilterState } from "@/lib/list-filter/url-state";
 import type { Entity, Settings } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
@@ -82,6 +84,14 @@ export function EntitiesIndex({
         searchPlaceholder="Search name, slug, tags, field content…"
         sortOptions={[...ENTITY_SORT_OPTIONS]}
         filterSelects={[
+          {
+            id: "archived",
+            label: "Archive",
+            options: ARCHIVE_FILTER_OPTIONS.map((o) => ({
+              value: o.value,
+              label: o.label,
+            })),
+          },
           {
             id: "type",
             label: "Type",
@@ -160,6 +170,7 @@ export function EntitiesIndex({
                     identity={identity}
                     monoPath={identity.isHomonym}
                   />
+                  {isEntityArchived(e) && <ArchivedBadge />}
                 </div>
                 <span className="shrink-0 text-xs text-zinc-500">
                   {formatDate(e.updatedAt)}

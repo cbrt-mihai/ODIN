@@ -49,6 +49,7 @@ import {
 import {
   deleteEntity,
   patchEntityField,
+  setEntityArchived,
   updateEntity,
 } from "@/lib/actions/entities";
 import { isDirty } from "@/lib/entities/dirty";
@@ -67,6 +68,9 @@ import {
   writeEntitySectionColumnCount,
   type SectionColumnCount,
 } from "@/lib/ui/section-columns";
+import { ArchiveToggleButton } from "@/components/archive/archive-toggle-button";
+import { ArchivedBadge } from "@/components/archive/archived-badge";
+import { isEntityArchived } from "@/lib/archive/status";
 
 const sectionColumnGridClass: Record<SectionColumnCount, string> = {
   1: "",
@@ -149,7 +153,7 @@ export function EntityEditor({
     Record<string, boolean>
   >({});
   const [sectionColumnCount, setSectionColumnCount] =
-    useState<SectionColumnCount>(() => readEntitySectionColumnCount(initial.id));
+    useState<SectionColumnCount>(1);
 
   useEffect(() => {
     setSectionColumnCount(readEntitySectionColumnCount(initial.id));
@@ -370,6 +374,7 @@ export function EntityEditor({
 
   const entityIdentity = getEntityIdentity(entity, allEntities);
   const sameNameCount = homonymCount(entity, allEntities);
+  const archived = isEntityArchived(entity);
 
   const enabledFieldTypes = fieldTypes.filter((f) => f.enabled);
 
@@ -711,6 +716,15 @@ export function EntityEditor({
             displayName={entity.displayName}
             initialPinned={pinnedToDashboard}
           />
+          <ArchiveToggleButton
+            archived={archived}
+            onToggle={async (next) => {
+              await setEntityArchived(entity.id, next);
+              setEntity((current) => ({ ...current, archived: next }));
+              setBaseline((current) => ({ ...current, archived: next }));
+              router.refresh();
+            }}
+          />
           {!viewMode && (
             <Button onClick={save} disabled={saving}>
               <Save className="h-4 w-4" />
@@ -751,14 +765,22 @@ export function EntityEditor({
             <EntityTypeBadge type={entity.type} />
             {viewMode ? (
               <>
-                <h2 className="text-lg font-semibold">
-                  {entityIdentity.isHomonym
-                    ? entityIdentity.qualifiedName
-                    : entity.displayName}
-                </h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-lg font-semibold">
+                    {entityIdentity.isHomonym
+                      ? entityIdentity.qualifiedName
+                      : entity.displayName}
+                  </h2>
+                  {archived && <ArchivedBadge />}
+                </div>
                 <p className="truncate font-mono text-xs text-zinc-500">
                   @{entityIdentity.referenceSlug}
                 </p>
+                {archived && (
+                  <p className="text-sm text-zinc-500">
+                    This entity is archived and hidden from default lists.
+                  </p>
+                )}
               </>
             ) : (
               <>

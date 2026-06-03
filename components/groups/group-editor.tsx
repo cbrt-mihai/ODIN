@@ -8,8 +8,11 @@ import { MarkdownFieldEditor } from "@/components/entities/markdown-field-editor
 import { ProfileAvatar } from "@/components/profile/profile-avatar";
 import { ProfileImageField } from "@/components/profile/profile-image-field";
 import { Label } from "@/components/ui/label";
-import { deleteGroup, updateGroup } from "@/lib/actions/groups";
+import { deleteGroup, setGroupArchived, updateGroup } from "@/lib/actions/groups";
 import type { Case, Entity, Group } from "@/lib/types";
+import { ArchiveToggleButton } from "@/components/archive/archive-toggle-button";
+import { ArchivedBadge } from "@/components/archive/archived-badge";
+import { isGroupArchived } from "@/lib/archive/status";
 
 export function GroupEditor({
   group,
@@ -28,6 +31,8 @@ export function GroupEditor({
   const [profileImage, setProfileImage] = useState(group.profileImage);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const archived = isGroupArchived(group);
 
   async function save() {
     setSaving(true);
@@ -93,11 +98,21 @@ export function GroupEditor({
                   style={{ backgroundColor: color }}
                 />
                 {group.title}
+                {archived && <ArchivedBadge />}
               </h1>
             )}
           </div>
         </div>
         <div className="flex flex-wrap gap-2 shrink-0">
+          {!editing && (
+            <ArchiveToggleButton
+              archived={archived}
+              onToggle={async (next) => {
+                await setGroupArchived(group.id, next);
+                router.refresh();
+              }}
+            />
+          )}
           {editing ? (
             <>
               <Button size="sm" onClick={save} disabled={saving}>
@@ -166,6 +181,11 @@ export function GroupEditor({
         </p>
       ) : (
         <p className="text-sm text-zinc-500">No description.</p>
+      )}
+      {archived && !editing && (
+        <p className="text-sm text-zinc-500">
+          This group is archived and hidden from default lists.
+        </p>
       )}
     </div>
   );

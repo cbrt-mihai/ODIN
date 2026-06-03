@@ -96,6 +96,24 @@ export async function updateGroup(
   revalidatePath(`/groups/${group.id}`);
 }
 
+export async function setGroupArchived(id: string, archived: boolean) {
+  const group = await getGroup(id);
+  if (!group) throw new Error("Group not found");
+  group.archived = archived;
+  group.updatedAt = new Date().toISOString();
+  await saveGroup(group);
+  await logActivity({
+    action: "update",
+    targetType: "group",
+    targetId: id,
+    summary: archived
+      ? `Archived group "${group.title}"`
+      : `Unarchived group "${group.title}"`,
+  });
+  revalidatePath("/groups");
+  revalidatePath(`/groups/${group.id}`);
+}
+
 export async function deleteGroup(id: string) {
   const g = await getGroup(id);
   if (!g) return;

@@ -19,6 +19,7 @@ import {
   caseFilterDefaults,
   filterAndSortCases,
 } from "@/lib/list-filter/cases";
+import { ARCHIVE_FILTER_OPTIONS } from "@/lib/archive/status";
 import type { ListFilterState } from "@/lib/list-filter/url-state";
 import type { Case } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
@@ -65,6 +66,14 @@ export function CasesIndex({
         searchPlaceholder="Search title, description, tags…"
         sortOptions={[...CASE_SORT_OPTIONS]}
         filterSelects={[
+          {
+            id: "archived",
+            label: "Archive",
+            options: ARCHIVE_FILTER_OPTIONS.map((o) => ({
+              value: o.value,
+              label: o.label,
+            })),
+          },
           {
             id: "status",
             label: "Status",

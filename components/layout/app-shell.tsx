@@ -6,16 +6,20 @@ import { Providers } from "@/components/providers";
 import { CommandPalette } from "./command-palette";
 import { Sidebar } from "./sidebar";
 import { WorkspaceWidthToggle } from "./workspace-width-toggle";
-import { readWideWorkspace } from "@/lib/ui/workspace-layout";
+import {
+  readWorkspaceWidth,
+  workspaceWidthShellClass,
+  type WorkspaceWidthMode,
+} from "@/lib/ui/workspace-layout";
 import { cn } from "@/lib/utils";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [wide, setWide] = useState(false);
+  const [widthMode, setWidthMode] = useState<WorkspaceWidthMode>("standard");
 
   useEffect(() => {
-    setWide(readWideWorkspace());
-    const sync = () => setWide(readWideWorkspace());
+    setWidthMode(readWorkspaceWidth());
+    const sync = () => setWidthMode(readWorkspaceWidth());
     window.addEventListener("storage", sync);
     window.addEventListener("theblacklist:workspace-width", sync);
     return () => {
@@ -69,12 +73,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         />
 
         <main className="flex-1 overflow-auto bg-zinc-950 pt-14 md:pt-0">
-          <div
-            className={cn(
-              "mx-auto min-h-full p-6 md:p-8 lg:p-10",
-              wide ? "max-w-[min(100%,96rem)]" : "max-w-6xl",
-            )}
-          >
+          <div className={cn(workspaceWidthShellClass(widthMode))}>
             <div className="mb-4 hidden justify-end md:flex">
               <WorkspaceWidthToggle />
             </div>

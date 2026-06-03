@@ -9,6 +9,11 @@ import { listResources } from "@/lib/actions/resources";
 import { listTools } from "@/lib/actions/tools";
 import { buildEntityIdentityMap } from "@/lib/entities/identity";
 import {
+  isCaseArchived,
+  isEntityArchived,
+  isGroupArchived,
+} from "@/lib/archive/status";
+import {
   entityFieldSearchBlob,
   findFieldMatches,
 } from "@/lib/search/field-text";
@@ -115,6 +120,7 @@ export async function globalSearch(query: string): Promise<SearchResult[]> {
   const identityMap = buildEntityIdentityMap(entities);
 
   for (const e of entities) {
+    if (isEntityArchived(e)) continue;
     const identity = identityMap.get(e.id);
     const metaHay = [
       identity?.searchText,
@@ -148,6 +154,7 @@ export async function globalSearch(query: string): Promise<SearchResult[]> {
   }
 
   for (const c of cases) {
+    if (isCaseArchived(c)) continue;
     const title = c.title.toLowerCase();
     const match =
       title.includes(q) ||
@@ -166,6 +173,7 @@ export async function globalSearch(query: string): Promise<SearchResult[]> {
   }
 
   for (const g of groups) {
+    if (isGroupArchived(g)) continue;
     const title = g.title.toLowerCase();
     const match =
       title.includes(q) ||

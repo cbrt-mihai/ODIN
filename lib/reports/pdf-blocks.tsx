@@ -1,5 +1,5 @@
 import React from "react";
-import { Text, View, StyleSheet } from "@react-pdf/renderer";
+import { Text, View, StyleSheet, Image } from "@react-pdf/renderer";
 import { formatProvenanceValidity } from "@/lib/date-range/format";
 import { migrateProofItem } from "@/lib/date-range/migrate";
 import { formatRelationshipForEntityWithMeta } from "@/lib/relationships/helpers";
@@ -10,6 +10,7 @@ import {
   sortSectionsFields,
 } from "@/lib/reports/render-shared";
 import { fieldFootnote } from "@/lib/reports/shared";
+import { galleryItemLabel, galleryPreviewKind } from "@/lib/reports/media";
 import type {
   Case,
   ContextEntry,
@@ -34,6 +35,8 @@ export const pdfStyles = StyleSheet.create({
   body: { marginBottom: 4 },
   footnote: { fontSize: 7, color: "#888", marginBottom: 4 },
   bullet: { marginLeft: 8, marginBottom: 2 },
+  image: { maxWidth: 240, maxHeight: 180, marginBottom: 6, objectFit: "contain" },
+  imageCaption: { fontSize: 7, color: "#666", marginBottom: 8 },
 });
 
 function ProvenancePdf({
@@ -136,6 +139,7 @@ export function EntityPdfPages({
   confLabel,
   relationshipTypes,
   confidenceTypes,
+  pdfImages,
 }: {
   entity: Entity;
   sections: Entity["sections"];
@@ -145,6 +149,7 @@ export function EntityPdfPages({
   confLabel: (id: string) => string;
   relationshipTypes: Settings["relationshipTypes"];
   confidenceTypes: Settings["confidenceTypes"];
+  pdfImages?: Map<string, string>;
 }) {
   const rels = relationships.filter(
     (r) => r.fromEntityId === entity.id || r.toEntityId === entity.id,
@@ -158,6 +163,15 @@ export function EntityPdfPages({
         Type: {entity.type} · Exported {new Date().toLocaleString()}
         {entity.tags?.length ? ` · Tags: ${entity.tags.join(", ")}` : ""}
       </Text>
+      {pdfImages?.get(`profile:${entity.id}`) ? (
+        <View>
+          <Text style={pdfStyles.h3}>Profile image</Text>
+          <Image
+            style={pdfStyles.image}
+            src={pdfImages.get(`profile:${entity.id}`)!}
+          />
+        </View>
+      ) : null}
       <ProvenancePdf provenance={entity.provenance} confLabel={confLabel} />
       <EntryListPdf
         title="Context"
@@ -228,15 +242,40 @@ export function EntityPdfPages({
           ))
       )}
       <Text style={pdfStyles.h2}>Gallery & attachments</Text>
-      <Text style={pdfStyles.body}>
-        Gallery: {entity.gallery.length} image(s) · Attachments:{" "}
-        {(entity.attachments ?? []).length} file(s)
-      </Text>
-      {(entity.attachments ?? []).map((a) => (
-        <Text key={a.id} style={pdfStyles.bullet}>
-          {a.filename} ({a.mimeType}) — {a.sha256}
-        </Text>
-      ))}
+      {entity.gallery.length === 0 ? (
+        <Text>No gallery items.</Text>
+      ) : (
+        [...entity.gallery]
+          .sort((a, b) => a.order - b.order)
+          .map((item) => {
+            const src = pdfImages?.get(`gallery:${item.id}`);
+            const kind = galleryPreviewKind(item);
+            return (
+              <View key={item.id} style={{ marginBottom: 8 }}>
+                {src && kind === "image" ? (
+                  <Image style={pdfStyles.image} src={src} />
+                ) : null}
+                <Text style={pdfStyles.imageCaption}>
+                  {galleryItemLabel(item)}
+                  {item.mimeType ? ` (${item.mimeType})` : ""}
+                  {item.sha256 ? ` · ${item.sha256.slice(0, 12)}…` : ""}
+                </Text>
+                {item.description ? (
+                  <Text style={pdfStyles.footnote}>{item.description}</Text>
+                ) : null}
+              </View>
+            );
+          })
+      )}
+      {(entity.attachments ?? []).length === 0 ? (
+        <Text>No attachments.</Text>
+      ) : (
+        (entity.attachments ?? []).map((a) => (
+          <Text key={a.id} style={pdfStyles.bullet}>
+            {a.filename} ({a.mimeType}) — {a.sha256}
+          </Text>
+        ))
+      )}
     </>
   );
 }
@@ -253,6 +292,7 @@ export function CasePdfPages({
   playbooks,
   tools,
   resources,
+  pdfImages,
 }: {
   caseData: Case;
   linked: Entity[];
@@ -265,6 +305,7 @@ export function CasePdfPages({
   playbooks: Playbook[];
   tools: Tool[];
   resources: Resource[];
+  pdfImages?: Map<string, string>;
 }) {
   const caseTools = tools.filter((t) =>
     (caseData.toolIds ?? []).includes(t.id),
@@ -284,6 +325,15 @@ export function CasePdfPages({
         Created {caseData.createdAt.slice(0, 10)} · Updated{" "}
         {caseData.updatedAt.slice(0, 10)}
       </Text>
+      {pdfImages?.get(`profile:case:${caseData.id}`) ? (
+        <View>
+          <Text style={pdfStyles.h3}>Profile image</Text>
+          <Image
+            style={pdfStyles.image}
+            src={pdfImages.get(`profile:case:${caseData.id}`)!}
+          />
+        </View>
+      ) : null}
       {caseData.description ? (
         <Text style={pdfStyles.body}>{caseData.description}</Text>
       ) : null}

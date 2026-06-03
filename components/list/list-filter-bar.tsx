@@ -56,7 +56,9 @@ export function ListFilterBar({
     Boolean(state.tags?.trim()) ||
     filterSelects.some((f) => {
       const v = state[f.id];
-      return v && v !== "all";
+      if (!v) return false;
+      if (f.id === "archived") return v !== "exclude";
+      return v !== "all";
     });
 
   return (
@@ -122,10 +124,17 @@ export function ListFilterBar({
           <div key={f.id} className="w-[min(100%,180px)]">
             <Label className="text-xs text-zinc-500">{f.label}</Label>
             <Select
-              value={state[f.id] ?? "all"}
-              onValueChange={(v) =>
-                onChange({ [f.id]: v === "all" ? undefined : v })
+              value={
+                state[f.id] ??
+                (f.id === "archived" ? "exclude" : "all")
               }
+              onValueChange={(v) => {
+                if (f.id === "archived") {
+                  onChange({ archived: v === "exclude" ? undefined : v });
+                  return;
+                }
+                onChange({ [f.id]: v === "all" ? undefined : v });
+              }}
             >
               <SelectTrigger className="mt-1 h-8 text-sm">
                 <SelectValue />

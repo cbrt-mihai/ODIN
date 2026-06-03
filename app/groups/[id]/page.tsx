@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { GroupEditor } from "@/components/groups/group-editor";
+import { GroupReportExportButtons } from "@/components/reports/report-export-buttons";
 import { ReferenceProvider } from "@/components/references/reference-context";
 import { listCases } from "@/lib/actions/cases";
 import { listEntities } from "@/lib/actions/entities";
@@ -39,6 +40,10 @@ export default async function GroupDetailPage({
   return (
     <ReferenceProvider entities={entities} cases={cases}>
     <div className="space-y-8">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-950/50 px-4 py-3">
+        <p className="text-sm text-zinc-400">Export group report</p>
+        <GroupReportExportButtons groupId={group.id} />
+      </div>
       <GroupEditor group={group} entities={entities} cases={cases} />
 
       <div className="grid gap-6 lg:grid-cols-2">

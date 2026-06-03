@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "seed:mock": "npx tsx scripts/seed-mock-data.ts",
-    "test": "npx tsx --test lib/references/resolve.test.ts lib/references/at-bracket-trigger.test.ts lib/entities/merge-analysis.test.ts lib/entities/identity.test.ts lib/entities/entity-types.test.ts lib/relationships/helpers.test.ts lib/relationships/graph-scope.test.ts lib/timeline/layout.test.ts lib/osint/extract-indicators.test.ts"
+    "test": "npx tsx --test lib/references/resolve.test.ts lib/references/at-bracket-trigger.test.ts lib/entities/merge-analysis.test.ts lib/entities/identity.test.ts lib/entities/entity-types.test.ts lib/relationships/helpers.test.ts lib/relationships/graph-scope.test.ts lib/timeline/layout.test.ts lib/osint/extract-indicators.test.ts lib/reports/scope.test.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -69,6 +69,28 @@ export async function updateCase(
   });
 }
 
+export async function setCaseArchived(id: string, archived: boolean) {
+  const caseData = await getCase(id);
+  if (!caseData) throw new Error("Case not found");
+  if (archived) {
+    caseData.status = "archived";
+  } else if (caseData.status === "archived") {
+    caseData.status = "active";
+  }
+  caseData.updatedAt = new Date().toISOString();
+  await saveCase(caseData);
+  await logActivity({
+    action: "update",
+    targetType: "case",
+    targetId: id,
+    summary: archived
+      ? `Archived case "${caseData.title}"`
+      : `Unarchived case "${caseData.title}"`,
+  });
+  revalidatePath("/cases");
+  revalidatePath(`/cases/${id}`);
+}
+
 export async function deleteCase(id: string) {
   const c = await getCase(id);
   if (!c) return;
