@@ -72,6 +72,7 @@ export function CaseEditor({
                 profileImage={caseData.profileImage}
                 kind="case"
                 size="lg"
+                shape="square"
               />
             )}
           </div>

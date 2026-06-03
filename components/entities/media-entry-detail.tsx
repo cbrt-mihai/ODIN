@@ -18,9 +18,18 @@ import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { ContextNotesEditor } from "@/components/entities/context-notes-editor";
+import {
+  annotationsFrom,
+  applyAnnotations,
+  EntryAnnotationsPanel,
+} from "@/components/entities/entry-annotations";
 import { ProofPanel } from "@/components/entities/proof-panel";
 import { MediaPreview } from "@/components/entities/media-preview";
+import { MediaValidityEditor } from "@/components/entities/media-validity-editor";
 import { galleryItemHref } from "@/lib/media/gallery";
+import { mediaItemCopyUrl } from "@/lib/media/item-ops";
+import { mediaDisplayName } from "@/lib/media/display-name";
+import { MEDIA_ITEM_DIALOG_PREVIEW_CLASS } from "@/lib/ui/media-dialog-layout";
 import { migrateAnnotationsToLists } from "@/lib/entries/helpers";
 import { hasProvenanceMeta } from "@/lib/entities/field-meta-summary";
 import { normalizeProvenance, proofCount } from "@/lib/proof/helpers";
@@ -30,7 +39,6 @@ import type {
   Entity,
   GalleryFolder,
   GalleryImage,
-  Provenance,
 } from "@/lib/types";
 
 type MediaItem = GalleryImage | Attachment;
@@ -50,6 +58,7 @@ export function MediaEntryDetail({
   onMoveFolder,
   entityId,
   baselineItem,
+  layout = "inline",
 }: {
   item: MediaItem;
   onChange: (item: MediaItem) => void;
@@ -60,14 +69,13 @@ export function MediaEntryDetail({
   onMoveFolder?: (folderId: string | undefined) => void;
   entityId?: string;
   baselineItem?: MediaItem;
+  layout?: "inline" | "dialog";
 }) {
-  const provenance = normalizeProvenance(item.provenance);
+  const provenance = item.provenance
+    ? normalizeProvenance(item.provenance)
+    : undefined;
   const { contextEntries, noteEntries } = migrateAnnotationsToLists(item);
   const [tab, setTab] = useState<MediaTab>("context");
-
-  function setProv(p: Provenance) {
-    onChange({ ...item, provenance: p });
-  }
 
   function setLists(ctx: typeof contextEntries, notes: typeof noteEntries) {
     onChange({
@@ -83,21 +91,34 @@ export function MediaEntryDetail({
     isDirty(item, baselineItem);
 
   const galleryHref = isGallery(item) ? galleryItemHref(item) : null;
+  const previewHref = galleryHref ?? mediaItemCopyUrl(item);
+
+  const displayName = mediaDisplayName(item);
+  const inDialog = layout === "dialog";
+  const previewVariant = inDialog ? "dialog" : "detail";
 
   return (
-    <div className="mt-2 space-y-3 rounded-md border border-zinc-800 bg-zinc-950/50 p-3">
-      {galleryHref && (
-        <MediaPreview
-          href={galleryHref}
-          title={item.caption ?? item.description ?? ""}
-          mimeType={item.mimeType}
-          filename={isGallery(item) ? item.filename : undefined}
-          url={isGallery(item) ? item.url : undefined}
-          path={isGallery(item) ? item.path : undefined}
-          variant="detail"
-        />
+    <div
+      className={
+        inDialog
+          ? "space-y-4"
+          : "mt-2 space-y-3 rounded-md border border-zinc-800 bg-zinc-950/50 p-3"
+      }
+    >
+      {previewHref && (
+        <div className={inDialog ? MEDIA_ITEM_DIALOG_PREVIEW_CLASS : undefined}>
+          <MediaPreview
+            href={previewHref}
+            title={displayName}
+            mimeType={item.mimeType}
+            filename={item.filename}
+            url={isGallery(item) ? item.url : undefined}
+            path={item.path}
+            variant={previewVariant}
+          />
+        </div>
       )}
-      {!readOnly && entityId && (
+      {entityId && !inDialog && (
         <div className="flex justify-end">
           <EntityItemSaveButton
             dirty={Boolean(itemDirty)}
@@ -111,7 +132,7 @@ export function MediaEntryDetail({
           />
         </div>
       )}
-      {isGallery(item) && folders && onMoveFolder && !readOnly && (
+      {folders && onMoveFolder && (
         <div>
           <Label className="text-xs text-zinc-500">Folder</Label>
           <Select
@@ -124,7 +145,7 @@ export function MediaEntryDetail({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__root__">All media (root)</SelectItem>
+              <SelectItem value="__root__">Root (no folder)</SelectItem>
               {folders.map((f) => (
                 <SelectItem key={f.id} value={f.id}>
                   {f.name}
@@ -134,18 +155,40 @@ export function MediaEntryDetail({
           </Select>
         </div>
       )}
-      {!readOnly && (
+      {readOnly ? (
+        <p className="text-sm font-medium text-zinc-200">{displayName}</p>
+      ) : (
         <div>
-          <Label className="text-xs text-zinc-500">Caption</Label>
+          <Label htmlFor={`media-name-${item.id}`} className="text-xs text-zinc-500">
+            Name
+          </Label>
           <Input
+            id={`media-name-${item.id}`}
             className="h-8 text-sm"
             value={item.caption ?? ""}
             onChange={(e) =>
               onChange({ ...item, caption: e.target.value || undefined })
             }
+            placeholder={displayName}
           />
         </div>
       )}
+
+      <EntryAnnotationsPanel
+        value={annotationsFrom(item)}
+        onChange={(ann) => onChange(applyAnnotations(item, ann))}
+        readOnly={readOnly}
+        entities={entities}
+        embedded
+        compact
+      />
+
+      <MediaValidityEditor
+        item={item}
+        onChange={onChange}
+        confidenceTypes={confidenceTypes}
+        readOnly={readOnly}
+      />
 
       {!readOnly && (
         <SegmentedControl<MediaTab>
@@ -187,6 +230,7 @@ export function MediaEntryDetail({
             readOnly={readOnly}
             entities={entities}
             defaultSubTab="context"
+            hideSubTabs
           />
         )}
 
@@ -200,20 +244,21 @@ export function MediaEntryDetail({
             readOnly={readOnly}
             entities={entities}
             defaultSubTab="notes"
+            hideSubTabs
           />
         )}
 
       {(readOnly || tab === "proof") &&
-        (!readOnly || hasProvenanceMeta(provenance)) && (
+        (provenance ? hasProvenanceMeta(provenance) : !readOnly) && (
         <ProofPanel
-          provenance={provenance}
-          onChange={setProv}
+          provenance={provenance ?? normalizeProvenance(undefined)}
+          onChange={(p) => onChange({ ...item, provenance: p })}
           readOnly={readOnly}
           confidenceTypes={confidenceTypes}
           entities={entities}
           entityId={entityId}
           label="Proof for this file"
-          embedded={readOnly}
+          embedded
         />
       )}
     </div>

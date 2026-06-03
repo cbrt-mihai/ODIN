@@ -95,6 +95,7 @@ export function EntityRecordPanel({
         readOnly={readOnly}
         entities={allEntities}
         defaultSubTab="context"
+        hideSubTabs
       />
     ) : tab === "notes" ? (
       <ContextNotesEditor
@@ -107,6 +108,7 @@ export function EntityRecordPanel({
         readOnly={readOnly}
         entities={allEntities}
         defaultSubTab="notes"
+        hideSubTabs
       />
     ) : null;
 

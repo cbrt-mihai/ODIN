@@ -36,6 +36,40 @@ const VALUE_FLAVOR_TYPES = new Set([
 
 type MetaTab = "context" | "notes" | "proof";
 
+/** Chevron-only control for expanding field meta — sits left of the field label. */
+export function FieldMetaChevron({
+  expanded,
+  onClick,
+  className,
+  title = "Field details",
+}: {
+  expanded: boolean;
+  onClick: () => void;
+  className?: string;
+  title?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-expanded={expanded}
+      aria-label={title}
+      className={cn(
+        "flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-800/60 hover:text-zinc-300",
+        className,
+      )}
+    >
+      <ChevronDown
+        className={cn(
+          "h-3.5 w-3.5 transition-transform",
+          !expanded && "-rotate-90",
+        )}
+      />
+    </button>
+  );
+}
+
 export function FieldMetaPanel({
   field,
   onChange,
@@ -46,6 +80,9 @@ export function FieldMetaPanel({
   defaultExpanded = false,
   defaultTab,
   onQuickEdit,
+  hideToggle = false,
+  expanded: expandedProp,
+  onExpandedChange,
 }: {
   field: Field;
   onChange: (f: Field) => void;
@@ -56,16 +93,22 @@ export function FieldMetaPanel({
   defaultExpanded?: boolean;
   defaultTab?: MetaTab;
   onQuickEdit?: (tab?: MetaTab) => void;
+  /** When true, parent renders {@link FieldMetaChevron} beside the field label. */
+  hideToggle?: boolean;
+  expanded?: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
 }) {
   const { contextEntries, noteEntries } = migrateAnnotationsToLists(field);
   const summary = fieldMetaSummary(field);
   const hasProof = hasProvenanceMeta(field.provenance);
-  const [expanded, setExpanded] = useState(defaultExpanded);
+  const [expandedInternal, setExpandedInternal] = useState(defaultExpanded);
+  const expanded = expandedProp ?? expandedInternal;
+  const setExpanded = onExpandedChange ?? setExpandedInternal;
   const [tab, setTab] = useState<MetaTab>(defaultTab ?? "context");
 
   useEffect(() => {
     if (defaultExpanded) setExpanded(true);
-  }, [defaultExpanded]);
+  }, [defaultExpanded, setExpanded]);
 
   useEffect(() => {
     if (defaultTab) setTab(defaultTab);
@@ -86,47 +129,54 @@ export function FieldMetaPanel({
   if (readOnly) {
     if (!summary && !onQuickEdit) return null;
     return (
-      <div className="mt-3 border-t border-zinc-800/50 pt-2">
-        <div className="flex w-full items-stretch gap-1">
-          <button
-            type="button"
-            onClick={() => setExpanded((e) => !e)}
+      <div className={cn(!hideToggle && "mt-3 border-t border-zinc-800/50 pt-2")}>
+        {!hideToggle && (
+          <div className="flex w-full items-stretch gap-1">
+            <button
+              type="button"
+              onClick={() => setExpanded(!expanded)}
+              className={cn(
+                collapsibleToggleButtonClass,
+                "min-w-0 flex-1 text-xs text-zinc-500 hover:text-zinc-300",
+              )}
+            >
+              <ChevronDown
+                className={cn(
+                  "h-3.5 w-3.5 shrink-0 transition-transform",
+                  !expanded && "-rotate-90",
+                )}
+              />
+              <span className="font-medium">Field details</span>
+              {summary ? (
+                <span className="text-zinc-600">— {summary}</span>
+              ) : null}
+            </button>
+            {onQuickEdit && (
+              <div
+                className="flex shrink-0 items-center self-stretch py-1 pr-1"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <QuickEditButton
+                  label="Edit details"
+                  onClick={() => onQuickEdit()}
+                />
+                {hasProof && (
+                  <QuickEditButton
+                    label="Edit proof"
+                    onClick={() => onQuickEdit("proof")}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        {expanded && (
+          <div
             className={cn(
-              collapsibleToggleButtonClass,
-              "min-w-0 flex-1 text-xs text-zinc-500 hover:text-zinc-300",
+              "space-y-3 rounded-lg border border-zinc-800/60 bg-zinc-950/30 p-3",
+              hideToggle ? "mt-0" : "mt-2",
             )}
           >
-            <ChevronDown
-              className={cn(
-                "h-3.5 w-3.5 shrink-0 transition-transform",
-                !expanded && "-rotate-90",
-              )}
-            />
-            <span className="font-medium">Field details</span>
-            {summary ? (
-              <span className="text-zinc-600">— {summary}</span>
-            ) : null}
-          </button>
-          {onQuickEdit && (
-            <div
-              className="flex shrink-0 items-center self-stretch py-1 pr-1"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <QuickEditButton
-                label="Edit details"
-                onClick={() => onQuickEdit()}
-              />
-              {hasProof && (
-                <QuickEditButton
-                  label="Edit proof"
-                  onClick={() => onQuickEdit("proof")}
-                />
-              )}
-            </div>
-          )}
-        </div>
-        {expanded && (
-          <div className="mt-2 space-y-3 rounded-lg border border-zinc-800/60 bg-zinc-950/30 p-3">
             {(contextEntries.length > 0 || noteEntries.length > 0) && (
               <ContextNotesEditor
                 contextEntries={contextEntries}
@@ -157,31 +207,38 @@ export function FieldMetaPanel({
   }
 
   return (
-    <div className="mt-3 border-t border-zinc-800/50 pt-2">
-      <button
-        type="button"
-        onClick={() => setExpanded((e) => !e)}
-        className={cn(
-          collapsibleToggleButtonClass,
-          "text-xs text-zinc-500 hover:text-zinc-300",
-        )}
-      >
-        <ChevronDown
+    <div className={cn(!hideToggle && "mt-3 border-t border-zinc-800/50 pt-2")}>
+      {!hideToggle && (
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
           className={cn(
-            "h-3.5 w-3.5 shrink-0 transition-transform",
-            !expanded && "-rotate-90",
+            collapsibleToggleButtonClass,
+            "text-xs text-zinc-500 hover:text-zinc-300",
           )}
-        />
-        <span className="font-medium">Field details</span>
-        {summary ? (
-          <span className="text-zinc-600">— {summary}</span>
-        ) : (
-          <span className="text-zinc-600">— add context, notes, or proof</span>
-        )}
-      </button>
+        >
+          <ChevronDown
+            className={cn(
+              "h-3.5 w-3.5 shrink-0 transition-transform",
+              !expanded && "-rotate-90",
+            )}
+          />
+          <span className="font-medium">Field details</span>
+          {summary ? (
+            <span className="text-zinc-600">— {summary}</span>
+          ) : (
+            <span className="text-zinc-600">— add context, notes, or proof</span>
+          )}
+        </button>
+      )}
 
       {expanded && (
-        <div className="mt-2 space-y-3 rounded-lg border border-zinc-800/60 bg-zinc-950/30 p-3">
+        <div
+          className={cn(
+            "space-y-3 rounded-lg border border-zinc-800/60 bg-zinc-950/30 p-3",
+            hideToggle ? "mt-0" : "mt-2",
+          )}
+        >
           <SegmentedControl<MetaTab>
             value={tab}
             onChange={setTab}
@@ -235,6 +292,7 @@ export function FieldMetaPanel({
                 onNotesChange={() => {}}
                 entities={entities}
                 defaultSubTab="context"
+                hideSubTabs
               />
             </div>
           )}
@@ -253,6 +311,7 @@ export function FieldMetaPanel({
                 }
                 entities={entities}
                 defaultSubTab="notes"
+                hideSubTabs
               />
             </div>
           )}

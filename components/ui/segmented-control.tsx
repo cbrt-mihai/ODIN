@@ -19,7 +19,8 @@ export function SegmentedControl<T extends string>({
     <div
       role="tablist"
       className={cn(
-        "inline-flex max-w-full flex-wrap rounded-lg border border-zinc-800 bg-zinc-950/80 p-0.5",
+        "inline-flex max-w-full rounded-lg border border-zinc-800 bg-zinc-950/80 p-0.5",
+        className?.includes("flex-nowrap") ? "flex-nowrap" : "flex-wrap",
         className,
       )}
     >

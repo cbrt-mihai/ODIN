@@ -33,6 +33,7 @@ export function ContextNotesEditor({
   readOnly,
   entities = [],
   defaultSubTab = "context",
+  hideSubTabs = false,
 }: {
   contextEntries: ContextEntry[];
   noteEntries: NoteEntry[];
@@ -41,15 +42,18 @@ export function ContextNotesEditor({
   readOnly?: boolean;
   entities?: Entity[];
   defaultSubTab?: SubTab;
+  /** When true, parent owns tab switching — do not render inner Context/Notes tabs. */
+  hideSubTabs?: boolean;
 }) {
   const [subTab, setSubTab] = useState<SubTab>(defaultSubTab);
+  const activeTab = hideSubTabs ? defaultSubTab : subTab;
   const contextCount = contextEntries.length;
   const noteCount = noteEntries.length;
 
   if (readOnly && contextCount === 0 && noteCount === 0) return null;
 
   const body =
-    subTab === "context" ? (
+    activeTab === "context" ? (
       <TypedEntryList<ContextEntry>
         entries={contextEntries}
         onChange={onContextChange}
@@ -130,24 +134,24 @@ export function ContextNotesEditor({
 
   return (
     <div className="space-y-3">
-      <SegmentedControl<SubTab>
-        value={subTab}
-        onChange={setSubTab}
-        options={[
-          {
-            value: "context",
-            label:
-              contextCount > 0 ? `Context (${contextCount})` : "Context",
-          },
-          {
-            value: "notes",
-            label: noteCount > 0 ? `Notes (${noteCount})` : "Notes",
-          },
-        ]}
-      />
+      {!hideSubTabs && (
+        <SegmentedControl<SubTab>
+          value={subTab}
+          onChange={setSubTab}
+          options={[
+            {
+              value: "context",
+              label:
+                contextCount > 0 ? `Context (${contextCount})` : "Context",
+            },
+            {
+              value: "notes",
+              label: noteCount > 0 ? `Notes (${noteCount})` : "Notes",
+            },
+          ]}
+        />
+      )}
       {body}
     </div>
   );
 }
-
-// useState import missing!

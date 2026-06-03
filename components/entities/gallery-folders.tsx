@@ -29,12 +29,20 @@ export function GalleryFolderNav({
   onSelectFolder,
   onChangeFolders,
   readOnly,
+  canCreateFolder,
+  onPersistFolders,
+  rootLabel = "All images",
 }: {
   folders: GalleryFolder[];
   currentFolderId?: string;
   onSelectFolder: (id: string | undefined) => void;
   onChangeFolders: (folders: GalleryFolder[]) => void;
+  /** When true, existing folder names are not editable inline. */
   readOnly?: boolean;
+  /** Allow creating folders (including from view mode). */
+  canCreateFolder?: boolean;
+  onPersistFolders?: (folders: GalleryFolder[]) => Promise<void>;
+  rootLabel?: string;
 }) {
   const sorted = useMemo(
     () => [...folders].sort((a, b) => a.order - b.order),
@@ -46,16 +54,30 @@ export function GalleryFolderNav({
   );
 
   const breadcrumb = buildFolderPath(sorted, currentFolderId);
+  const allowCreate = canCreateFolder ?? !readOnly;
 
-  function addFolder() {
-    const name = "New folder";
+  async function addFolder() {
+    let name = "New folder";
+    if (readOnly) {
+      const entered = window.prompt("Folder name", name)?.trim();
+      if (!entered) return;
+      name = entered;
+    }
     const next: GalleryFolder = {
       id: uuidv4(),
       name,
       parentId: currentFolderId,
       order: children.length,
     };
-    onChangeFolders([...folders, next]);
+    const updated = [...folders, next];
+    onChangeFolders(updated);
+    await onPersistFolders?.(updated);
+  }
+
+  async function renameFolder(id: string, name: string) {
+    const updated = folders.map((x) => (x.id === id ? { ...x, name } : x));
+    onChangeFolders(updated);
+    await onPersistFolders?.(updated);
   }
 
   return (
@@ -70,7 +92,7 @@ export function GalleryFolderNav({
           onClick={() => onSelectFolder(undefined)}
         >
           <Home className="h-3.5 w-3.5" />
-          All images
+          {rootLabel}
         </button>
         {breadcrumb.map((f) => (
           <span key={f.id} className="inline-flex items-center gap-1 text-zinc-500">
@@ -87,13 +109,13 @@ export function GalleryFolderNav({
             </button>
           </span>
         ))}
-        {!readOnly && (
+        {allowCreate && (
           <Button
             type="button"
             variant="ghost"
             size="sm"
             className="ml-auto h-7"
-            onClick={addFolder}
+            onClick={() => void addFolder()}
           >
             <FolderPlus className="h-3 w-3" />
             New folder
@@ -129,6 +151,7 @@ export function GalleryFolderNav({
                         ),
                       )
                     }
+                    onBlur={(e) => void renameFolder(f.id, e.target.value)}
                     className="h-7 border-0 bg-transparent p-0 text-sm focus-visible:ring-0"
                   />
                 )}

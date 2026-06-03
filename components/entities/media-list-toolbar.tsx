@@ -11,18 +11,27 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import type { MediaListControls, MediaSortKey } from "@/lib/media-list/utils";
+import {
+  GALLERY_PREVIEW_SIZE_OPTIONS,
+  type GalleryPreviewSize,
+} from "@/lib/ui/gallery-preview-size";
 
 export function MediaListToolbar({
   controls,
   onChange,
   mode,
   mimeOptions = [],
+  previewSize,
+  onPreviewSizeChange,
 }: {
   controls: MediaListControls;
   onChange: (patch: Partial<MediaListControls>) => void;
   mode: "gallery" | "files";
   mimeOptions?: string[];
+  previewSize?: GalleryPreviewSize;
+  onPreviewSizeChange?: (size: GalleryPreviewSize) => void;
 }) {
   const sortOptions: { id: MediaSortKey; label: string }[] =
     mode === "gallery"
@@ -125,6 +134,21 @@ export function MediaListToolbar({
               ))}
             </SelectContent>
           </Select>
+        </div>
+      )}
+      {mode === "gallery" && previewSize && onPreviewSizeChange && (
+        <div className="w-full sm:w-auto sm:min-w-[12rem]">
+          <Label className="text-xs text-zinc-500">Preview size</Label>
+          <SegmentedControl
+            value={previewSize}
+            onChange={onPreviewSizeChange}
+            options={GALLERY_PREVIEW_SIZE_OPTIONS}
+            className={
+              previewSize === "small"
+                ? "w-full sm:w-auto"
+                : "w-full flex-nowrap sm:w-auto"
+            }
+          />
         </div>
       )}
     </div>

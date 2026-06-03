@@ -197,6 +197,8 @@ export interface GalleryImage {
   folderId?: string;
   sha256?: string;
   order: number;
+  /** When this image depicts or applies (with per-bound certainty). */
+  validity?: DateRangesValue;
   provenance?: Provenance;
 }
 
@@ -215,7 +217,10 @@ export interface Attachment {
   notesFlavor?: TextFlavor;
   contextEntries?: ContextEntry[];
   noteEntries?: NoteEntry[];
+  folderId?: string;
   order?: number;
+  /** When this file depicts or applies (with per-bound certainty). */
+  validity?: DateRangesValue;
   provenance?: Provenance;
   uploadedAt: string;
 }
@@ -266,6 +271,8 @@ export interface Entity {
   /** Entity-wide evidence and source metadata */
   provenance?: Provenance;
   galleryFolders?: GalleryFolder[];
+  /** Folder tree for platform file attachments (same shape as gallery folders). */
+  attachmentFolders?: GalleryFolder[];
   gallery: GalleryImage[];
   attachments: Attachment[];
   events: TimelineEvent[];

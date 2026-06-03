@@ -16,6 +16,7 @@ import {
   isGalleryMediaMime,
 } from "@/lib/media/preview";
 import type { Attachment, GalleryImage } from "@/lib/types";
+import { defaultMediaDisplayName } from "@/lib/media/display-name";
 
 export const runtime = "nodejs";
 
@@ -40,7 +41,7 @@ export async function POST(
     const kind = form.get("kind") as string;
     const file = form.get("file");
     const url = form.get("url") as string | null;
-    const caption = (form.get("caption") as string) || undefined;
+    const captionOverride = (form.get("caption") as string)?.trim() || undefined;
     const folderId = (form.get("folderId") as string) || undefined;
 
     if (kind === "profile-url" && url?.trim()) {
@@ -51,11 +52,13 @@ export async function POST(
     }
 
     if (kind === "gallery-url" && url) {
+      const trimmedUrl = url.trim();
       const img: GalleryImage = {
         id: uuidv4(),
         source: "url",
-        url: url.trim(),
-        caption,
+        url: trimmedUrl,
+        caption:
+          captionOverride || defaultMediaDisplayName(trimmedUrl),
         folderId,
         order: entity.gallery.length,
       };
@@ -122,7 +125,8 @@ export async function POST(
         path: relativeUploadPath(id, "images", filename),
         filename: safeName(origName),
         mimeType: mime,
-        caption,
+        caption:
+          captionOverride || defaultMediaDisplayName(origName),
         folderId,
         sha256: hash,
         order: entity.gallery.length,
@@ -161,7 +165,9 @@ export async function POST(
         path: relativeUploadPath(id, "attachments", filename),
         sha256: hash,
         sizeBytes: buffer.length,
-        caption,
+        caption:
+          captionOverride || defaultMediaDisplayName(origName),
+        folderId,
         order: (entity.attachments ?? []).length,
         uploadedAt: new Date().toISOString(),
       };

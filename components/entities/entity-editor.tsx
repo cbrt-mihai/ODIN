@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { Eye, GripVertical, Pencil, Plus, Save, Trash2 } from "lucide-react";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -16,10 +16,9 @@ import { AddFieldDialog } from "./add-field-dialog";
 import { FieldRenderer } from "./field-renderer";
 import { FieldTypeTransform } from "./field-type-transform";
 import { EntityRecordPanel } from "./entity-record-panel";
-import { FieldMetaPanel } from "./field-meta-panel";
+import { FieldMetaChevron, FieldMetaPanel } from "./field-meta-panel";
 import { normalizeEntity } from "@/lib/entities/normalize";
 import { ConfidenceSelect } from "./confidence-select";
-import { EntityRefLabelFromIdentity } from "./entity-ref-label";
 import { EntityTypeBadge } from "./entity-type-badge";
 import { ProfileAvatar } from "@/components/profile/profile-avatar";
 import { ProfileImageField } from "@/components/profile/profile-image-field";
@@ -43,7 +42,10 @@ import {
   editFocusElementId,
   type EntityEditFocus,
 } from "@/lib/entities/edit-focus";
-import { hasProvenanceMeta } from "@/lib/entities/field-meta-summary";
+import {
+  fieldMetaSummary,
+  hasProvenanceMeta,
+} from "@/lib/entities/field-meta-summary";
 import {
   deleteEntity,
   patchEntityField,
@@ -59,6 +61,19 @@ import type {
   Group,
   Section,
 } from "@/lib/types";
+import {
+  distributeSectionsToColumns,
+  readEntitySectionColumnCount,
+  writeEntitySectionColumnCount,
+  type SectionColumnCount,
+} from "@/lib/ui/section-columns";
+
+const sectionColumnGridClass: Record<SectionColumnCount, string> = {
+  1: "",
+  2: "grid w-full grid-cols-1 items-start gap-4 md:grid-cols-2",
+  3: "grid w-full grid-cols-1 items-start gap-4 md:grid-cols-3",
+  4: "grid w-full grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-4",
+};
 
 interface EntityEditorProps {
   entity: Entity;
@@ -89,6 +104,7 @@ export function EntityEditor({
       ...initial,
       gallery: initial.gallery ?? [],
       galleryFolders: initial.galleryFolders ?? [],
+      attachmentFolders: initial.attachmentFolders ?? [],
       attachments: initial.attachments ?? [],
       events: initial.events ?? [],
       tags: initial.tags ?? [],
@@ -101,6 +117,7 @@ export function EntityEditor({
       ...initial,
       gallery: initial.gallery ?? [],
       galleryFolders: initial.galleryFolders ?? [],
+      attachmentFolders: initial.attachmentFolders ?? [],
       attachments: initial.attachments ?? [],
       events: initial.events ?? [],
       tags: initial.tags ?? [],
@@ -115,6 +132,7 @@ export function EntityEditor({
       ...initial,
       gallery: initial.gallery ?? [],
       galleryFolders: initial.galleryFolders ?? [],
+      attachmentFolders: initial.attachmentFolders ?? [],
       attachments: initial.attachments ?? [],
       events: initial.events ?? [],
       tags: initial.tags ?? [],
@@ -127,6 +145,23 @@ export function EntityEditor({
   const [viewMode, setViewMode] = useState(true);
   const [reorderLayout, setReorderLayout] = useState(false);
   const [editFocus, setEditFocus] = useState<EntityEditFocus | null>(null);
+  const [fieldMetaExpanded, setFieldMetaExpanded] = useState<
+    Record<string, boolean>
+  >({});
+  const [sectionColumnCount, setSectionColumnCount] =
+    useState<SectionColumnCount>(() => readEntitySectionColumnCount(initial.id));
+
+  useEffect(() => {
+    setSectionColumnCount(readEntitySectionColumnCount(initial.id));
+  }, [initial.id]);
+
+  const setSectionColumns = useCallback(
+    (count: SectionColumnCount) => {
+      setSectionColumnCount(count);
+      writeEntitySectionColumnCount(entity.id, count);
+    },
+    [entity.id],
+  );
 
   const quickEdit = useCallback((focus: EntityEditFocus) => {
     if (focus.target !== "membership") {
@@ -326,11 +361,306 @@ export function EntityEditor({
 
   const sortedSections = [...entity.sections].sort((a, b) => a.order - b.order);
   const sectionIds = sortedSections.map((s) => s.id);
+  const sectionColumns = useMemo(
+    () => distributeSectionsToColumns(sectionIds, sectionColumnCount),
+    [sectionIds, sectionColumnCount],
+  );
+  const useSectionColumns =
+    sectionColumnCount > 1 && !reorderLayout;
 
   const entityIdentity = getEntityIdentity(entity, allEntities);
   const sameNameCount = homonymCount(entity, allEntities);
 
   const enabledFieldTypes = fieldTypes.filter((f) => f.enabled);
+
+  function renderSectionCard(
+    section: Section,
+    sectionHandle: ReactNode | null,
+  ) {
+    const fieldIds = [...section.fields]
+      .sort((a, b) => a.order - b.order)
+      .map((f) => f.id);
+    const sectionFocused =
+      editFocus?.target === "section" && editFocus.sectionId === section.id;
+
+    return (
+      <CollapsibleCard
+        key={`${section.id}${sectionFocused ? "-focus" : ""}`}
+        id={`section-${section.id}`}
+        defaultOpen={!viewMode}
+        forceOpen={sectionFocused || !viewMode}
+        title={
+          <span className="inline-flex items-center gap-2">
+            {(reorderLayout || !viewMode) && sectionHandle}
+            {viewMode ? (
+              section.title
+            ) : (
+              <Input
+                value={section.title}
+                onChange={(e) =>
+                  updateSection(section.id, { title: e.target.value })
+                }
+                className="max-w-xs font-semibold"
+              />
+            )}
+          </span>
+        }
+        actions={
+          viewMode ? (
+            <QuickEditButton
+              label="Edit section"
+              onClick={() =>
+                quickEdit({ target: "section", sectionId: section.id })
+              }
+            />
+          ) : (
+            <>
+              <AddFieldDialog
+                fieldTypes={enabledFieldTypes}
+                confidenceTypes={confidenceTypes}
+                entities={allEntities}
+                onAdd={(field) => addField(section.id, field)}
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => removeSection(section.id)}
+                title="Remove section"
+              >
+                <Trash2 className="h-4 w-4 text-zinc-500" />
+              </Button>
+            </>
+          )
+        }
+      >
+        {section.fields.length === 0 ? (
+          <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-zinc-800/80 bg-zinc-950/30 px-4 py-6">
+            <p className="text-sm text-zinc-500">
+              No fields yet. Add one with a name, value, and optional evidence.
+            </p>
+            {!viewMode && (
+              <AddFieldDialog
+                fieldTypes={enabledFieldTypes}
+                confidenceTypes={confidenceTypes}
+                entities={allEntities}
+                onAdd={(field) => addField(section.id, field)}
+              />
+            )}
+          </div>
+        ) : (
+          <SortableList
+            ids={fieldIds}
+            onReorder={(ids) => reorderFields(section.id, ids)}
+            disabled={!dragEnabled}
+            className="space-y-3"
+          >
+            {(fieldId, fieldHandle) => {
+              const field = section.fields.find((f) => f.id === fieldId)!;
+              const baselineSection = baseline.sections.find(
+                (s) => s.id === section.id,
+              );
+              const baselineField = baselineSection?.fields.find(
+                (f) => f.id === fieldId,
+              );
+              const fieldDirty =
+                !viewMode && baselineField && isDirty(field, baselineField);
+              const fieldFocused =
+                editFocus?.target === "field" && editFocus.fieldId === field.id;
+              const fieldHasProof = hasProvenanceMeta(field.provenance);
+              const fieldMetaSummaryText = fieldMetaSummary(field);
+              const showMetaToggle =
+                !viewMode ||
+                Boolean(fieldMetaSummaryText) ||
+                fieldHasProof;
+              const metaExpanded =
+                fieldMetaExpanded[field.id] ?? (fieldFocused ? true : false);
+              const debunked = isDebunked(
+                field.provenance.confidence,
+                confidenceTypes,
+              );
+              return (
+                <div
+                  key={field.id}
+                  id={`field-${field.id}`}
+                  className={cn(
+                    fieldFocused && "ring-1 ring-emerald-500/40",
+                    "rounded-lg border border-zinc-800/80 bg-zinc-900/20",
+                    debunked && "opacity-60",
+                  )}
+                >
+                  <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800/50 px-3 py-2">
+                    {(reorderLayout || !viewMode) && fieldHandle}
+                    {showMetaToggle && (
+                      <FieldMetaChevron
+                        expanded={metaExpanded}
+                        onClick={() =>
+                          setFieldMetaExpanded((prev) => ({
+                            ...prev,
+                            [field.id]: !metaExpanded,
+                          }))
+                        }
+                      />
+                    )}
+                    {viewMode ? (
+                      <span className="min-w-0 flex-1 font-medium text-zinc-200">
+                        {field.label}
+                      </span>
+                    ) : (
+                      <Input
+                        value={field.label}
+                        onChange={(e) =>
+                          updateField(section.id, {
+                            ...field,
+                            label: e.target.value,
+                          })
+                        }
+                        className="h-8 max-w-[220px] flex-1 border-0 bg-transparent px-0 font-medium shadow-none focus-visible:ring-0"
+                        placeholder="Field name"
+                      />
+                    )}
+                    {!viewMode ? (
+                      <>
+                        <FieldTypeTransform
+                          field={field}
+                          fieldTypes={enabledFieldTypes}
+                          onTransform={(f) => updateField(section.id, f)}
+                        />
+                        <ConfidenceSelect
+                          hideLabel
+                          value={field.provenance.confidence}
+                          confidenceTypes={confidenceTypes}
+                          onChange={(confidence) =>
+                            updateField(section.id, {
+                              ...field,
+                              provenance: {
+                                ...field.provenance,
+                                confidence,
+                              },
+                            })
+                          }
+                          className="w-[7.5rem] shrink-0"
+                        />
+                      </>
+                    ) : (
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-md px-2 py-0.5 text-xs",
+                          debunked && "line-through",
+                        )}
+                        style={confidenceBadgeStyle(
+                          field.provenance.confidence,
+                          confidenceTypes,
+                        )}
+                      >
+                        {confidenceTypes.find(
+                          (c) => c.id === field.provenance.confidence,
+                        )?.label ?? field.provenance.confidence}
+                      </span>
+                    )}
+                    {viewMode && (
+                      <>
+                        <QuickEditButton
+                          label="Edit field"
+                          onClick={() =>
+                            quickEdit({
+                              target: "field",
+                              sectionId: section.id,
+                              fieldId: field.id,
+                            })
+                          }
+                        />
+                        {fieldHasProof && (
+                          <QuickEditButton
+                            label="Edit proof"
+                            onClick={() =>
+                              quickEdit({
+                                target: "field",
+                                sectionId: section.id,
+                                fieldId: field.id,
+                                metaTab: "proof",
+                              })
+                            }
+                          />
+                        )}
+                      </>
+                    )}
+                    {!viewMode && (
+                      <>
+                        <EntityItemSaveButton
+                          dirty={Boolean(fieldDirty)}
+                          onSave={async () => {
+                            await patchEntityField(
+                              entity.id,
+                              section.id,
+                              field,
+                            );
+                          }}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0"
+                          onClick={() => removeField(section.id, field.id)}
+                          title="Remove field"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-zinc-500" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  <div className="px-3 py-3">
+                    <FieldRenderer
+                      field={field}
+                      entities={allEntities}
+                      cases={cases}
+                      onChange={(f) => updateField(section.id, f)}
+                      readOnly={viewMode}
+                      confidenceTypes={confidenceTypes}
+                    />
+                    {showMetaToggle && (
+                      <FieldMetaPanel
+                        field={field}
+                        onChange={(f) => updateField(section.id, f)}
+                        readOnly={viewMode}
+                        confidenceTypes={confidenceTypes}
+                        entities={allEntities}
+                        entityId={entity.id}
+                        hideToggle
+                        expanded={metaExpanded}
+                        onExpandedChange={(open) =>
+                          setFieldMetaExpanded((prev) => ({
+                            ...prev,
+                            [field.id]: open,
+                          }))
+                        }
+                        defaultExpanded={fieldFocused}
+                        defaultTab={
+                          fieldFocused && editFocus?.target === "field"
+                            ? editFocus.metaTab
+                            : undefined
+                        }
+                        onQuickEdit={
+                          viewMode
+                            ? (metaTab) =>
+                                quickEdit({
+                                  target: "field",
+                                  sectionId: section.id,
+                                  fieldId: field.id,
+                                  metaTab,
+                                })
+                            : undefined
+                        }
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            }}
+          </SortableList>
+        )}
+      </CollapsibleCard>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -393,13 +723,14 @@ export function EntityEditor({
           </Button>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-[minmax(11rem,auto)_minmax(0,1fr)] md:items-start">
+        <div className="grid gap-6 md:grid-cols-[minmax(14rem,auto)_minmax(0,1fr)] md:items-start">
           <div className="flex justify-center md:block">
             {viewMode ? (
               <ProfileAvatar
                 profileImage={entity.profileImage}
                 entityType={entity.type}
-                size="lg"
+                size="xl"
+                shape="square"
               />
             ) : (
               <ProfileImageField
@@ -425,13 +756,9 @@ export function EntityEditor({
                     ? entityIdentity.qualifiedName
                     : entity.displayName}
                 </h2>
-                <EntityRefLabelFromIdentity
-                  identity={entityIdentity}
-                  monoPath
-                />
-                {entity.slug && (
-                  <p className="text-xs text-zinc-500">slug: {entity.slug}</p>
-                )}
+                <p className="truncate font-mono text-xs text-zinc-500">
+                  @{entityIdentity.referenceSlug}
+                </p>
               </>
             ) : (
               <>
@@ -555,13 +882,34 @@ export function EntityEditor({
         focusOpen={editFocus?.target === "membership"}
       />
 
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <h3 className="text-sm font-medium text-zinc-400">Sections</h3>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {viewMode && !reorderLayout && (
             <p className="text-xs text-zinc-600">
               Use Reorder to drag sections and fields
             </p>
+          )}
+          {!reorderLayout && (
+            <div
+              className="flex rounded-lg border border-zinc-800 p-0.5"
+              role="group"
+              aria-label="Section columns"
+            >
+              {([1, 2, 3, 4] as const).map((n) => (
+                <Button
+                  key={n}
+                  type="button"
+                  variant={sectionColumnCount === n ? "secondary" : "ghost"}
+                  size="sm"
+                  className="min-w-9 px-2"
+                  onClick={() => setSectionColumns(n)}
+                  title={`${n} column${n === 1 ? "" : "s"}`}
+                >
+                  {n}
+                </Button>
+              ))}
+            </div>
           )}
           {!viewMode && (
             <Button variant="outline" size="sm" onClick={addSection}>
@@ -572,6 +920,21 @@ export function EntityEditor({
         </div>
       </div>
 
+      {useSectionColumns ? (
+        <div className={sectionColumnGridClass[sectionColumnCount]}>
+          {sectionColumns.map((colSectionIds, colIndex) => (
+            <div
+              key={colIndex}
+              className="flex w-full min-w-0 flex-col gap-4 self-start"
+            >
+              {colSectionIds.map((sectionId) => {
+                const section = sortedSections.find((s) => s.id === sectionId)!;
+                return renderSectionCard(section, null);
+              })}
+            </div>
+          ))}
+        </div>
+      ) : (
       <SortableList
         ids={sectionIds}
         onReorder={reorderSections}
@@ -580,271 +943,10 @@ export function EntityEditor({
       >
         {(sectionId, sectionHandle) => {
           const section = sortedSections.find((s) => s.id === sectionId)!;
-          const fieldIds = [...section.fields]
-            .sort((a, b) => a.order - b.order)
-            .map((f) => f.id);
-          const sectionFocused =
-            editFocus?.target === "section" &&
-            editFocus.sectionId === section.id;
-
-          return (
-          <CollapsibleCard
-            key={`${section.id}${sectionFocused ? "-focus" : ""}`}
-            id={`section-${section.id}`}
-            defaultOpen={!viewMode}
-            forceOpen={sectionFocused || !viewMode}
-            title={
-              <span className="inline-flex items-center gap-2">
-                {(reorderLayout || !viewMode) && sectionHandle}
-                {viewMode ? (
-                  section.title
-                ) : (
-                  <Input
-                    value={section.title}
-                    onChange={(e) =>
-                      updateSection(section.id, { title: e.target.value })
-                    }
-                    className="max-w-xs font-semibold"
-                  />
-                )}
-              </span>
-            }
-            actions={
-              viewMode ? (
-                <QuickEditButton
-                  label="Edit section"
-                  onClick={() =>
-                    quickEdit({ target: "section", sectionId: section.id })
-                  }
-                />
-              ) : (
-                <>
-                  <AddFieldDialog
-                    fieldTypes={enabledFieldTypes}
-                    confidenceTypes={confidenceTypes}
-                    entities={allEntities}
-                    onAdd={(field) => addField(section.id, field)}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeSection(section.id)}
-                    title="Remove section"
-                  >
-                    <Trash2 className="h-4 w-4 text-zinc-500" />
-                  </Button>
-                </>
-              )
-            }
-          >
-              {section.fields.length === 0 ? (
-                <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-zinc-800/80 bg-zinc-950/30 px-4 py-6">
-                  <p className="text-sm text-zinc-500">
-                    No fields yet. Add one with a name, value, and optional
-                    evidence.
-                  </p>
-                  {!viewMode && (
-                    <AddFieldDialog
-                      fieldTypes={enabledFieldTypes}
-                      confidenceTypes={confidenceTypes}
-                      entities={allEntities}
-                      onAdd={(field) => addField(section.id, field)}
-                    />
-                  )}
-                </div>
-              ) : (
-                <SortableList
-                  ids={fieldIds}
-                  onReorder={(ids) => reorderFields(section.id, ids)}
-                  disabled={!dragEnabled}
-                  className="space-y-3"
-                >
-                  {(fieldId, fieldHandle) => {
-                  const field = section.fields.find((f) => f.id === fieldId)!;
-                  const baselineSection = baseline.sections.find(
-                    (s) => s.id === sectionId,
-                  );
-                  const baselineField = baselineSection?.fields.find(
-                    (f) => f.id === fieldId,
-                  );
-                  const fieldDirty =
-                    !viewMode &&
-                    baselineField &&
-                    isDirty(field, baselineField);
-                  const fieldFocused =
-                    editFocus?.target === "field" &&
-                    editFocus.fieldId === field.id;
-                  const fieldHasProof = hasProvenanceMeta(field.provenance);
-                  const debunked = isDebunked(
-                    field.provenance.confidence,
-                    confidenceTypes,
-                  );
-                  return (
-                  <div
-                    key={field.id}
-                    id={`field-${field.id}`}
-                    className={cn(
-                      fieldFocused && "ring-1 ring-emerald-500/40",
-                      "rounded-lg border border-zinc-800/80 bg-zinc-900/20",
-                      debunked && "opacity-60",
-                    )}
-                  >
-                    <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800/50 px-3 py-2">
-                      {(reorderLayout || !viewMode) && fieldHandle}
-                      {viewMode ? (
-                        <span className="min-w-0 flex-1 font-medium text-zinc-200">
-                          {field.label}
-                        </span>
-                      ) : (
-                        <Input
-                          value={field.label}
-                          onChange={(e) =>
-                            updateField(section.id, {
-                              ...field,
-                              label: e.target.value,
-                            })
-                          }
-                          className="h-8 max-w-[220px] flex-1 border-0 bg-transparent px-0 font-medium shadow-none focus-visible:ring-0"
-                          placeholder="Field name"
-                        />
-                      )}
-                      {!viewMode ? (
-                        <>
-                          <FieldTypeTransform
-                            field={field}
-                            fieldTypes={enabledFieldTypes}
-                            onTransform={(f) =>
-                              updateField(section.id, f)
-                            }
-                          />
-                          <ConfidenceSelect
-                            hideLabel
-                            value={field.provenance.confidence}
-                            confidenceTypes={confidenceTypes}
-                            onChange={(confidence) =>
-                              updateField(section.id, {
-                                ...field,
-                                provenance: {
-                                  ...field.provenance,
-                                  confidence,
-                                },
-                              })
-                            }
-                            className="w-[7.5rem] shrink-0"
-                          />
-                        </>
-                      ) : (
-                        <span
-                          className={cn(
-                            "shrink-0 rounded-md px-2 py-0.5 text-xs",
-                            debunked && "line-through",
-                          )}
-                          style={confidenceBadgeStyle(
-                            field.provenance.confidence,
-                            confidenceTypes,
-                          )}
-                        >
-                          {confidenceTypes.find(
-                            (c) => c.id === field.provenance.confidence,
-                          )?.label ?? field.provenance.confidence}
-                        </span>
-                      )}
-                      {viewMode && (
-                        <>
-                          <QuickEditButton
-                            label="Edit field"
-                            onClick={() =>
-                              quickEdit({
-                                target: "field",
-                                sectionId: section.id,
-                                fieldId: field.id,
-                              })
-                            }
-                          />
-                          {fieldHasProof && (
-                            <QuickEditButton
-                              label="Edit proof"
-                              onClick={() =>
-                                quickEdit({
-                                  target: "field",
-                                  sectionId: section.id,
-                                  fieldId: field.id,
-                                  metaTab: "proof",
-                                })
-                              }
-                            />
-                          )}
-                        </>
-                      )}
-                      {!viewMode && (
-                        <>
-                          <EntityItemSaveButton
-                            dirty={Boolean(fieldDirty)}
-                            onSave={async () => {
-                              await patchEntityField(
-                                entity.id,
-                                section.id,
-                                field,
-                              );
-                            }}
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 shrink-0"
-                            onClick={() => removeField(section.id, field.id)}
-                            title="Remove field"
-                          >
-                            <Trash2 className="h-3.5 w-3.5 text-zinc-500" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                    <div className="px-3 py-3">
-                      <FieldRenderer
-                        field={field}
-                        entities={allEntities}
-                        cases={cases}
-                        onChange={(f) => updateField(section.id, f)}
-                        readOnly={viewMode}
-                        confidenceTypes={confidenceTypes}
-                      />
-                      <FieldMetaPanel
-                        field={field}
-                        onChange={(f) => updateField(section.id, f)}
-                        readOnly={viewMode}
-                        confidenceTypes={confidenceTypes}
-                        entities={allEntities}
-                        entityId={entity.id}
-                        defaultExpanded={fieldFocused}
-                        defaultTab={
-                          fieldFocused &&
-                          editFocus?.target === "field"
-                            ? editFocus.metaTab
-                            : undefined
-                        }
-                        onQuickEdit={
-                          viewMode
-                            ? (metaTab) =>
-                                quickEdit({
-                                  target: "field",
-                                  sectionId: section.id,
-                                  fieldId: field.id,
-                                  metaTab,
-                                })
-                            : undefined
-                        }
-                      />
-                    </div>
-                  </div>
-                  );
-                  }}
-                </SortableList>
-              )}
-          </CollapsibleCard>
-          );
+          return renderSectionCard(section, sectionHandle);
         }}
       </SortableList>
+      )}
 
       {!viewMode && entity.sections.length === 0 && (
         <Button variant="outline" onClick={addSection}>
@@ -858,6 +960,7 @@ export function EntityEditor({
         baselineEntity={baseline}
         readOnly={viewMode}
         confidenceTypes={confidenceTypes}
+        entities={allEntities}
         onReorder={(gallery) => setEntity((e) => ({ ...e, gallery }))}
         onUpdateGallery={(gallery) => setEntity((e) => ({ ...e, gallery }))}
         onUpdateFolders={(galleryFolders) =>
@@ -869,9 +972,13 @@ export function EntityEditor({
         baselineEntity={baseline}
         readOnly={viewMode}
         confidenceTypes={confidenceTypes}
+        entities={allEntities}
         onReorder={(attachments) => setEntity((e) => ({ ...e, attachments }))}
         onUpdateAttachments={(attachments) =>
           setEntity((e) => ({ ...e, attachments }))
+        }
+        onUpdateFolders={(attachmentFolders) =>
+          setEntity((e) => ({ ...e, attachmentFolders }))
         }
       />
     </div>

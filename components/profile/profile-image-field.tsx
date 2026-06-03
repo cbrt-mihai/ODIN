@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { profileImageFromGallery } from "@/lib/profile/image";
+import { cn } from "@/lib/utils";
 import type { EntityType, GalleryImage, ProfileImage } from "@/lib/types";
 import type { ProfileScope } from "@/lib/uploads/paths";
 
@@ -184,15 +185,24 @@ export function ProfileImageField({
       </div>
   );
 
+  const avatarSize = scope === "entity" ? "xl" : "lg";
+  const avatarShape = "square" as const;
+
   if (layout === "compact") {
     return (
-      <div className="w-full max-w-[11rem] shrink-0 space-y-3">
+      <div
+        className={cn(
+          "w-full shrink-0 space-y-3",
+          scope === "entity" ? "max-w-[14rem]" : "max-w-[11rem]",
+        )}
+      >
         <ProfileAvatar
           profileImage={value}
           entityType={entityType}
           kind={scope === "entity" ? "entity" : scope}
           groupColor={groupColor}
-          size="lg"
+          size={avatarSize}
+          shape={avatarShape}
           className="mx-auto"
         />
         {controls}
@@ -207,7 +217,8 @@ export function ProfileImageField({
         entityType={entityType}
         kind={scope === "entity" ? "entity" : scope}
         groupColor={groupColor}
-        size="lg"
+        size={avatarSize}
+        shape={avatarShape}
       />
       {controls}
     </div>

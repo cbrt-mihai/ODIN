@@ -37,6 +37,7 @@ export function normalizeEntity(entity: Entity): Entity {
       return {
         ...g,
         ...migrated,
+        validity: normalizeStoredValidity(g.validity),
         provenance: g.provenance
           ? normalizeProvenance(g.provenance)
           : undefined,
@@ -47,6 +48,7 @@ export function normalizeEntity(entity: Entity): Entity {
       return {
         ...a,
         ...migrated,
+        validity: normalizeStoredValidity(a.validity),
         provenance: a.provenance
           ? normalizeProvenance(a.provenance)
           : undefined,

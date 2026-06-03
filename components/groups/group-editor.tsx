@@ -63,6 +63,7 @@ export function GroupEditor({
             ) : (
               <ProfileAvatar
                 profileImage={group.profileImage}
+                shape="square"
                 kind="group"
                 groupColor={group.color}
                 size="lg"

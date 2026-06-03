@@ -21,7 +21,7 @@ export function MediaPreview({
   url?: string;
   path?: string;
   fallbackScreenshot?: boolean;
-  variant?: "detail" | "compact" | "thumb";
+  variant?: "detail" | "compact" | "thumb" | "dialog";
 }) {
   const kind = mediaPreviewKind({
     mimeType,
@@ -34,7 +34,9 @@ export function MediaPreview({
   if (!kind || !href) return null;
 
   const isDetail = variant === "detail";
+  const isDialog = variant === "dialog";
   const isThumb = variant === "thumb";
+  const isExpanded = isDetail || isDialog;
 
   if (kind === "image") {
     const img = (
@@ -45,14 +47,16 @@ export function MediaPreview({
         className={cn(
           "block bg-zinc-950/80",
           isThumb ? "h-full w-full object-cover" : "object-contain",
-          !isThumb &&
-            (isDetail ? "max-h-56 w-auto max-w-full" : "max-h-36 w-full"),
+          isDialog &&
+            "mx-auto max-h-[min(50vh,28rem)] w-auto max-w-full",
+          isDetail && !isDialog && "max-h-56 w-auto max-w-full",
+          !isThumb && !isDetail && !isDialog && "max-h-36 w-full",
         )}
       />
     );
     if (isThumb) return img;
     return (
-      <PreviewLink href={href} isDetail={isDetail}>
+      <PreviewLink href={href} isDetail={isExpanded} isDialog={isDialog}>
         {img}
       </PreviewLink>
     );
@@ -83,9 +87,11 @@ export function MediaPreview({
         preload="metadata"
         className={cn(
           "rounded-md border border-zinc-800 bg-zinc-950",
-          isDetail
-            ? "mx-auto max-h-56 max-w-[min(100%,20rem)] w-full"
-            : "h-44 w-full",
+          isDialog
+            ? "mx-auto max-h-[min(50vh,28rem)] w-full max-w-full"
+            : isDetail
+              ? "mx-auto max-h-56 max-w-[min(100%,20rem)] w-full"
+              : "h-44 w-full",
         )}
       />
     );
@@ -111,7 +117,11 @@ export function MediaPreview({
         preload="metadata"
         className={cn(
           "w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1",
-          isDetail ? "mx-auto max-w-[min(100%,20rem)]" : "",
+          isDialog
+            ? "mx-auto max-w-full"
+            : isDetail
+              ? "mx-auto max-w-[min(100%,20rem)]"
+              : "",
         )}
       />
     );
@@ -134,9 +144,11 @@ export function MediaPreview({
       title={title}
       className={cn(
         "rounded-md border border-zinc-800 bg-zinc-950",
-        isDetail
-          ? "mx-auto h-44 max-w-[min(100%,20rem)] w-full"
-          : "h-44 w-full",
+        isDialog
+          ? "mx-auto h-[min(50vh,28rem)] w-full max-w-full"
+          : isDetail
+            ? "mx-auto h-44 max-w-[min(100%,20rem)] w-full"
+            : "h-44 w-full",
       )}
     />
   );
@@ -170,10 +182,12 @@ export function MediaPreviewBadge({ kind }: { kind: MediaPreviewKind }) {
 function PreviewLink({
   href,
   isDetail,
+  isDialog,
   children,
 }: {
   href: string;
   isDetail: boolean;
+  isDialog?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -183,7 +197,11 @@ function PreviewLink({
       rel="noreferrer"
       className={cn(
         "inline-block overflow-hidden rounded-md border border-zinc-800 bg-zinc-950",
-        isDetail ? "max-w-[min(100%,16rem)]" : "max-w-xs",
+        isDialog
+          ? "max-w-full"
+          : isDetail
+            ? "max-w-[min(100%,16rem)]"
+            : "max-w-xs",
       )}
     >
       {children}

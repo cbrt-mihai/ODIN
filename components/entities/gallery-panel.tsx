@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
-import { Trash2, Upload } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
@@ -10,8 +10,8 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import { SortableList } from "@/components/ui/sortable-list";
 import { MediaListToolbar } from "@/components/entities/media-list-toolbar";
 import { GalleryFolderNav } from "@/components/entities/gallery-folders";
-import { MediaEntryDetail } from "@/components/entities/media-entry-detail";
 import { MediaPreview } from "@/components/entities/media-preview";
+import { MediaUploadDestination } from "@/components/entities/media-upload-destination";
 import {
   DEFAULT_MEDIA_CONTROLS,
   matchesSearch,
@@ -20,14 +20,40 @@ import {
   type MediaListControls,
 } from "@/lib/media-list/utils";
 import { galleryItemHref } from "@/lib/media/gallery";
+import { mediaDisplayName } from "@/lib/media/display-name";
 import { GALLERY_FILE_ACCEPT } from "@/lib/media/preview";
-import { patchEntityGallery } from "@/lib/actions/entities";
+import {
+  DEFAULT_UPLOAD_DESTINATION,
+  resolveMediaUploadFolderId,
+} from "@/lib/media/upload-destination";
+import {
+  patchEntityGallery,
+  patchEntityGalleryFolders,
+  patchEntityGalleryItem,
+} from "@/lib/actions/entities";
+import { duplicateGalleryItem } from "@/lib/media/item-ops";
+import { MediaItemEditDialog, type MediaEditItem } from "@/components/entities/media-item-edit-dialog";
+import { MediaItemDetailDialog } from "@/components/entities/media-item-detail-dialog";
+import { MediaItemToolbar } from "@/components/entities/media-item-toolbar";
+import { uploadEntityMediaFiles, uploadGalleryUrl } from "@/lib/uploads/entity-media-upload";
+import {
+  MediaUploadReviewDialog,
+  type MediaReviewItem,
+} from "@/components/entities/media-upload-review-dialog";
 import type {
   ConfidenceTypeDefinition,
   Entity,
   GalleryFolder,
   GalleryImage,
 } from "@/lib/types";
+import type { MediaUploadDestinationState } from "@/lib/media/upload-destination";
+import {
+  DEFAULT_GALLERY_PREVIEW_SIZE,
+  galleryPreviewLayout,
+  readGalleryPreviewSize,
+  writeGalleryPreviewSize,
+  type GalleryPreviewSize,
+} from "@/lib/ui/gallery-preview-size";
 
 export function GalleryPanel({
   entity,
@@ -37,6 +63,7 @@ export function GalleryPanel({
   onUpdateGallery,
   onUpdateFolders,
   confidenceTypes,
+  entities = [],
 }: {
   entity: Entity;
   baselineEntity?: Entity;
@@ -45,18 +72,43 @@ export function GalleryPanel({
   onUpdateGallery?: (gallery: GalleryImage[]) => void;
   onUpdateFolders?: (folders: GalleryFolder[]) => void;
   confidenceTypes: ConfidenceTypeDefinition[];
+  entities?: Entity[];
 }) {
   const router = useRouter();
   const confirm = useConfirm();
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [currentFolderId, setCurrentFolderId] = useState<string | undefined>();
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [detailItem, setDetailItem] = useState<MediaEditItem | null>(null);
+  const [uploadDestination, setUploadDestination] =
+    useState<MediaUploadDestinationState>(DEFAULT_UPLOAD_DESTINATION);
   const [controls, setControls] = useState<MediaListControls>(
     DEFAULT_MEDIA_CONTROLS,
   );
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewItems, setReviewItems] = useState<MediaReviewItem[]>([]);
+  const [editItem, setEditItem] = useState<MediaEditItem | null>(null);
+  const [previewSize, setPreviewSize] = useState<GalleryPreviewSize>(
+    DEFAULT_GALLERY_PREVIEW_SIZE,
+  );
+
+  useEffect(() => {
+    setPreviewSize(readGalleryPreviewSize());
+  }, []);
+
+  const previewLayout = galleryPreviewLayout(previewSize);
 
   const folders = entity.galleryFolders ?? [];
+  const atRoot = currentFolderId === undefined;
+
+  const persistFolders = useCallback(
+    async (next: GalleryFolder[]) => {
+      onUpdateFolders?.(next);
+      await patchEntityGalleryFolders(entity.id, next);
+      router.refresh();
+    },
+    [entity.id, onUpdateFolders, router],
+  );
 
   const sortedBase = useMemo(
     () => [...entity.gallery].sort((a, b) => a.order - b.order),
@@ -77,6 +129,7 @@ export function GalleryPanel({
       return matchesSearch(
         controls.search,
         item.caption,
+        item.filename,
         item.description,
         item.url,
         item.sha256,
@@ -91,8 +144,8 @@ export function GalleryPanel({
       switch (controls.sort) {
         case "name":
           return compareStrings(
-            a.caption ?? a.description ?? a.url ?? "",
-            b.caption ?? b.description ?? b.url ?? "",
+            mediaDisplayName(a),
+            mediaDisplayName(b),
             dir,
           );
         case "date":
@@ -107,7 +160,6 @@ export function GalleryPanel({
 
   const displayIds = displayed.map((i) => i.id);
   const canReorder =
-    !readOnly &&
     onReorder &&
     controls.sort === "order" &&
     !controls.search &&
@@ -120,18 +172,38 @@ export function GalleryPanel({
     );
   }
 
-  async function uploadFile(file: File) {
-    const form = new FormData();
-    form.append("kind", "gallery");
-    form.append("file", file);
-    if (currentFolderId) form.append("folderId", currentFolderId);
+  async function targetFolderId() {
+    return resolveMediaUploadFolderId(
+      currentFolderId,
+      uploadDestination,
+      folders,
+      persistFolders,
+    );
+  }
+
+  function openReview(uploads: MediaReviewItem[]) {
+    if (!uploads.length) return;
+    setReviewItems(uploads);
+    setReviewOpen(true);
+    router.refresh();
+  }
+
+  async function uploadFiles(files: File[]) {
+    if (files.length === 0) return;
+    if (
+      atRoot &&
+      uploadDestination.mode === "existing" &&
+      !uploadDestination.existingFolderId
+    ) {
+      return;
+    }
     setLoading(true);
     try {
-      await fetch(`/api/entities/${entity.id}/upload`, {
-        method: "POST",
-        body: form,
+      const folderId = await targetFolderId();
+      const uploads = await uploadEntityMediaFiles(entity.id, "gallery", files, {
+        folderId,
       });
-      router.refresh();
+      openReview(uploads);
     } finally {
       setLoading(false);
     }
@@ -140,28 +212,57 @@ export function GalleryPanel({
   async function addUrl(e: React.FormEvent) {
     e.preventDefault();
     if (!url.trim()) return;
-    const form = new FormData();
-    form.append("kind", "gallery-url");
-    form.append("url", url);
-    if (currentFolderId) form.append("folderId", currentFolderId);
+    if (
+      atRoot &&
+      uploadDestination.mode === "existing" &&
+      !uploadDestination.existingFolderId
+    ) {
+      return;
+    }
+    const folderId = await targetFolderId();
     setLoading(true);
     try {
-      await fetch(`/api/entities/${entity.id}/upload`, {
-        method: "POST",
-        body: form,
-      });
+      const item = await uploadGalleryUrl(entity.id, url.trim(), { folderId });
       setUrl("");
-      router.refresh();
+      openReview([{ kind: "gallery", item }]);
     } finally {
       setLoading(false);
     }
+  }
+
+  async function moveItem(item: GalleryImage, folderId: string | undefined) {
+    const next = { ...item, folderId };
+    updateItem(item.id, next);
+    await patchEntityGalleryItem(entity.id, next);
+    router.refresh();
+  }
+
+  async function duplicateItem(item: GalleryImage) {
+    const order =
+      Math.max(-1, ...entity.gallery.map((g) => g.order)) + 1;
+    const copy = duplicateGalleryItem(item, order);
+    const next = [...entity.gallery, copy];
+    onUpdateGallery?.(next);
+    await patchEntityGallery(entity.id, next);
+    router.refresh();
+  }
+
+  async function removeReviewItem(review: MediaReviewItem) {
+    if (review.kind !== "gallery") return;
+    const id = review.item.id;
+    await fetch(
+      `/api/entities/${entity.id}/upload?galleryId=${id}`,
+      { method: "DELETE" },
+    );
+    onUpdateGallery?.(entity.gallery.filter((g) => g.id !== id));
+    setReviewItems((items) => items.filter((i) => i.item.id !== id));
   }
 
   async function remove(galleryId: string) {
     const item = entity.gallery.find((g) => g.id === galleryId);
     const ok = await confirm({
       title: "Remove media",
-      description: `Remove "${item?.caption ?? item?.description ?? item?.url ?? "this item"}" from the gallery?`,
+      description: `Remove "${mediaDisplayName(item)}" from the gallery?`,
       confirmLabel: "Remove",
       destructive: true,
     });
@@ -200,6 +301,9 @@ export function GalleryPanel({
           onSelectFolder={setCurrentFolderId}
           onChangeFolders={onUpdateFolders}
           readOnly={readOnly}
+          canCreateFolder
+          onPersistFolders={persistFolders}
+          rootLabel="All images"
         />
       )}
 
@@ -207,35 +311,52 @@ export function GalleryPanel({
         controls={controls}
         onChange={(patch) => setControls((c) => ({ ...c, ...patch }))}
         mode="gallery"
+        previewSize={previewSize}
+        onPreviewSizeChange={(size) => {
+          setPreviewSize(size);
+          writeGalleryPreviewSize(size);
+        }}
       />
 
-      {!readOnly && (
-        <div className="mt-3 flex flex-wrap gap-3">
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm hover:bg-zinc-700">
-            <Upload className="h-4 w-4" />
-            Upload media
-            <input
-              type="file"
-              accept={GALLERY_FILE_ACCEPT}
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) uploadFile(f);
-              }}
-            />
-          </label>
-          <form onSubmit={addUrl} className="flex min-w-[200px] flex-1 gap-2">
-            <Input
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="Media URL (image, video, audio)"
-            />
-            <Button type="submit" size="sm" disabled={loading}>
-              Add URL
-            </Button>
-          </form>
+      {atRoot && (
+        <div className="mt-3">
+          <MediaUploadDestination
+            folders={folders}
+            value={uploadDestination}
+            onChange={setUploadDestination}
+            rootLabel="Root (no folder)"
+          />
         </div>
       )}
+
+      <div className="mt-3 flex flex-wrap gap-3">
+        <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm hover:bg-zinc-700">
+          <Upload className="h-4 w-4" />
+          Upload media
+          <input
+            type="file"
+            accept={GALLERY_FILE_ACCEPT}
+            multiple
+            className="hidden"
+            disabled={loading}
+            onChange={(e) => {
+              const files = Array.from(e.target.files ?? []);
+              e.target.value = "";
+              if (files.length) void uploadFiles(files);
+            }}
+          />
+        </label>
+        <form onSubmit={addUrl} className="flex min-w-[200px] flex-1 gap-2">
+          <Input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="Media URL (image, video, audio)"
+          />
+          <Button type="submit" size="sm" disabled={loading}>
+            Add URL
+          </Button>
+        </form>
+      </div>
 
       {entity.gallery.length === 0 ? (
         <p className="mt-3 text-sm text-zinc-500">No media yet.</p>
@@ -246,12 +367,11 @@ export function GalleryPanel({
           ids={displayIds}
           onReorder={handleReorder}
           disabled={!canReorder}
-          className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+          className={`mt-3 ${previewLayout.gridClass}`}
         >
           {(id, handle) => {
             const item = displayed.find((g) => g.id === id)!;
             const src = galleryItemHref(item);
-            const open = expandedId === id;
             return (
               <div
                 key={item.id}
@@ -262,12 +382,14 @@ export function GalleryPanel({
                 )}
                 <div
                   className="aspect-square w-full cursor-pointer overflow-hidden"
-                  onClick={() => setExpandedId(open ? null : id)}
+                  onClick={() =>
+                    setDetailItem({ kind: "gallery", item })
+                  }
                 >
                   {src ? (
                     <MediaPreview
                       href={src}
-                      title={item.caption ?? item.description ?? ""}
+                      title={mediaDisplayName(item)}
                       mimeType={item.mimeType}
                       filename={item.filename}
                       url={item.url}
@@ -280,49 +402,38 @@ export function GalleryPanel({
                     </div>
                   )}
                 </div>
-                <div className="p-2 space-y-1">
-                  <p className="text-xs font-medium text-zinc-300 truncate">
-                    {item.caption ?? item.description ?? "Untitled"}
+                <div className={previewLayout.cardMetaClass}>
+                  <p className={previewLayout.titleClass}>
+                    {mediaDisplayName(item)}
                   </p>
                   {(item.tags ?? []).length > 0 && (
-                    <p className="text-[10px] text-zinc-500 truncate">
+                    <p className={previewLayout.tagsClass}>
                       {item.tags!.join(" · ")}
                     </p>
                   )}
                   <button
                     type="button"
-                    className="text-[10px] text-blue-400 hover:underline"
-                    onClick={() => setExpandedId(open ? null : id)}
+                    className={previewLayout.detailsClass}
+                    onClick={() =>
+                      setDetailItem({ kind: "gallery", item })
+                    }
                   >
-                    {open ? "Hide details" : "Details & proof"}
+                    Details & proof
                   </button>
                 </div>
-                {open && onUpdateGallery && (
-                  <MediaEntryDetail
+                <div className="absolute right-1 top-1 z-10">
+                  <MediaItemToolbar
                     item={item}
-                    baselineItem={(baselineEntity ?? entity).gallery.find(
-                      (g) => g.id === item.id,
-                    )}
-                    entityId={entity.id}
-                    onChange={(next) => updateItem(id, next as GalleryImage)}
-                    readOnly={readOnly}
-                    confidenceTypes={confidenceTypes}
                     folders={folders}
-                    onMoveFolder={(folderId) =>
-                      updateItem(id, { ...item, folderId })
+                    expanded={previewLayout.toolbarExpanded}
+                    onEdit={() =>
+                      setEditItem({ kind: "gallery", item })
                     }
+                    onDuplicate={() => void duplicateItem(item)}
+                    onMove={(folderId) => void moveItem(item, folderId)}
+                    onDelete={() => void remove(item.id)}
                   />
-                )}
-                {!readOnly && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-1 top-1 h-7 w-7 bg-black/50"
-                    onClick={() => remove(item.id)}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                )}
+                </div>
               </div>
             );
           }}
@@ -333,6 +444,69 @@ export function GalleryPanel({
           Drag items to reorder — order saves automatically.
         </p>
       )}
+
+      <MediaItemDetailDialog
+        item={detailItem}
+        onOpenChange={(open) => {
+          if (!open) setDetailItem(null);
+        }}
+        entityId={entity.id}
+        folders={folders}
+        confidenceTypes={confidenceTypes}
+        entities={entities}
+        canEdit={Boolean(onUpdateGallery)}
+        onSaved={(saved) => {
+          if (saved.kind === "gallery") {
+            onUpdateGallery?.(
+              entity.gallery.map((g) =>
+                g.id === saved.item.id ? saved.item : g,
+              ),
+            );
+          }
+        }}
+      />
+
+      <MediaItemEditDialog
+        item={editItem}
+        onOpenChange={(open) => {
+          if (!open) setEditItem(null);
+        }}
+        entityId={entity.id}
+        folders={folders}
+        confidenceTypes={confidenceTypes}
+        entities={entities}
+        onSaved={(saved) => {
+          if (saved.kind === "gallery") {
+            onUpdateGallery?.(
+              entity.gallery.map((g) =>
+                g.id === saved.item.id ? saved.item : g,
+              ),
+            );
+          }
+        }}
+      />
+
+      <MediaUploadReviewDialog
+        open={reviewOpen}
+        items={reviewItems}
+        onOpenChange={setReviewOpen}
+        entityId={entity.id}
+        folders={folders}
+        confidenceTypes={confidenceTypes}
+        entities={entities}
+        onItemSaved={(review) => {
+          if (review.kind === "gallery") {
+            onUpdateGallery?.(
+              entity.gallery.some((g) => g.id === review.item.id)
+                ? entity.gallery.map((g) =>
+                    g.id === review.item.id ? review.item : g,
+                  )
+                : [...entity.gallery, review.item],
+            );
+          }
+        }}
+        onItemRemoved={removeReviewItem}
+      />
     </CollapsibleCard>
   );
 }

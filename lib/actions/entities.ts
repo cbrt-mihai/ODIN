@@ -9,8 +9,14 @@ import {
   getEntity,
   getGroups,
   getSettings,
+  saveCase,
   saveEntity,
 } from "@/lib/storage";
+import {
+  rewireEntityRecord,
+  rewireWorkspaceForEntitySlugChange,
+  slugChangeRoots,
+} from "@/lib/entities/rewire-slug";
 import { saveEntitySnapshot } from "@/lib/storage/snapshots";
 import { moveEntityToTrash } from "@/lib/storage/trash";
 import {
@@ -25,6 +31,7 @@ import type {
   EntitySummary,
   EntityType,
   Field,
+  GalleryFolder,
   GalleryImage,
   Provenance,
   Section,
@@ -183,7 +190,46 @@ export async function updateEntity(entity: Entity) {
   const withMembership = await syncEntityMembershipIds(entity);
   const normalized = normalizeEntity(withMembership);
   normalized.updatedAt = new Date().toISOString();
-  await saveEntity(normalized);
+
+  const previous = await getEntity(normalized.id);
+  const slugChange =
+    previous && slugChangeRoots(previous, normalized);
+
+  if (slugChange) {
+    const [entities, cases] = await Promise.all([getEntities(), getCases()]);
+    const { entities: rewiredEntities, cases: rewiredCases } =
+      rewireWorkspaceForEntitySlugChange(
+        entities,
+        cases,
+        slugChange.oldRoot,
+        slugChange.newRoot,
+      );
+    const now = normalized.updatedAt;
+    const self = rewireEntityRecord(
+      normalized,
+      slugChange.oldRoot,
+      slugChange.newRoot,
+    );
+    const saves: Promise<unknown>[] = [
+      saveEntity({ ...self, updatedAt: now }),
+    ];
+    for (let i = 0; i < rewiredEntities.length; i++) {
+      const ent = rewiredEntities[i];
+      if (ent.id !== normalized.id && ent !== entities[i]) {
+        saves.push(saveEntity({ ...ent, updatedAt: now }));
+      }
+    }
+    for (let i = 0; i < rewiredCases.length; i++) {
+      const caseData = rewiredCases[i];
+      if (caseData !== cases[i]) {
+        saves.push(saveCase({ ...caseData, updatedAt: now }));
+      }
+    }
+    await Promise.all(saves);
+  } else {
+    await saveEntity(normalized);
+  }
+
   await logActivity({
     action: "update",
     targetType: "entity",
@@ -290,6 +336,30 @@ export async function patchEntityAttachments(
   const entity = await getEntity(entityId);
   if (!entity) throw new Error("Entity not found");
   entity.attachments = attachments;
+  entity.updatedAt = new Date().toISOString();
+  await saveEntity(normalizeEntity(entity));
+  return entity;
+}
+
+export async function patchEntityGalleryFolders(
+  entityId: string,
+  galleryFolders: GalleryFolder[],
+) {
+  const entity = await getEntity(entityId);
+  if (!entity) throw new Error("Entity not found");
+  entity.galleryFolders = galleryFolders;
+  entity.updatedAt = new Date().toISOString();
+  await saveEntity(normalizeEntity(entity));
+  return entity;
+}
+
+export async function patchEntityAttachmentFolders(
+  entityId: string,
+  attachmentFolders: GalleryFolder[],
+) {
+  const entity = await getEntity(entityId);
+  if (!entity) throw new Error("Entity not found");
+  entity.attachmentFolders = attachmentFolders;
   entity.updatedAt = new Date().toISOString();
   await saveEntity(normalizeEntity(entity));
   return entity;

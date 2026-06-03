@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { MarkdownReadonly } from "@/components/markdown/markdown-readonly";
+import { DateRangesReadonly } from "@/components/entities/date-range-confidence-readonly";
 import {
   FieldValueValidityReadonly,
   fieldValueUsesDateRangeData,
@@ -10,7 +11,6 @@ import { ReadonlyLinkInline } from "@/components/links/readonly-link-inline";
 import { LinkDestinationButton } from "@/components/links/link-destination-button";
 import {
   formatDateRange,
-  formatDateRanges,
   formatLocation,
   isDateRangeValue,
   isDateRangesValue,
@@ -20,6 +20,7 @@ import {
   migrateDateRangesValue,
 } from "@/lib/date-range/migrate";
 import { confidenceBadgeStyle } from "@/lib/confidence";
+import type { DateRangeValue } from "@/lib/types";
 import {
   effectiveValueFlavor,
   stringValue,
@@ -34,7 +35,6 @@ import {
 } from "@/lib/types";
 import type {
   ConfidenceTypeDefinition,
-  DateRangeValue,
   DatesValue,
   Entity,
   Field,
@@ -75,7 +75,10 @@ export function ReadonlyFieldValue({
     return (
       <>
         {content}
-        <FieldValueValidityReadonly field={field} />
+        <FieldValueValidityReadonly
+          field={field}
+          confidenceTypes={confidenceTypes}
+        />
       </>
     );
   }
@@ -240,43 +243,20 @@ export function ReadonlyFieldValue({
     if (isDateRangesValue(data)) {
       const ranges = migrateDateRangesValue(data);
       return wrapValue(
-        <div className="space-y-2 text-zinc-200">
-          {ranges.entries.map((range, i) => (
-            <p key={i}>{formatDateRange(range)}</p>
-          ))}
-        </div>,
+        <DateRangesReadonly
+          ranges={ranges.entries}
+          confidenceTypes={confidenceTypes}
+          multiLabel="Period"
+        />,
       );
     }
     if (isDateRangeValue(data)) {
       const range = data as DateRangeValue;
       return wrapValue(
-        <div className="space-y-1 text-zinc-200">
-          <p>{formatDateRange(range)}</p>
-          <div className="flex flex-wrap gap-2 text-xs">
-            {range.start.confidence && (
-              <span
-                className="rounded px-1.5 py-0.5"
-                style={confidenceBadgeStyle(
-                  range.start.confidence,
-                  confidenceTypes,
-                )}
-              >
-                Start: {confLabel(range.start.confidence, confidenceTypes)}
-              </span>
-            )}
-            {range.end.confidence && (
-              <span
-                className="rounded px-1.5 py-0.5"
-                style={confidenceBadgeStyle(
-                  range.end.confidence,
-                  confidenceTypes,
-                )}
-              >
-                End: {confLabel(range.end.confidence, confidenceTypes)}
-              </span>
-            )}
-          </div>
-        </div>,
+        <DateRangesReadonly
+          ranges={[range]}
+          confidenceTypes={confidenceTypes}
+        />,
       );
     }
   }

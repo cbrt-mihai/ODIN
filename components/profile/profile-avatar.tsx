@@ -25,18 +25,30 @@ export function ProfileAvatar({
   kind = "entity",
   groupColor,
   size = "md",
+  shape = "circle",
   className,
 }: {
   profileImage?: ProfileImage;
   entityType?: EntityType;
   kind?: "entity" | "case" | "group";
   groupColor?: string;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
+  /** circle for compact lists; square for record page headers */
+  shape?: "circle" | "square";
   className?: string;
 }) {
   const href = profileImageHref(profileImage);
   const dim =
-    size === "sm" ? "h-8 w-8" : size === "lg" ? "h-16 w-16" : "h-10 w-10";
+    size === "sm"
+      ? "h-8 w-8"
+      : size === "lg"
+        ? "h-16 w-16"
+        : size === "xl"
+          ? shape === "square"
+            ? "h-36 w-28"
+            : "h-28 w-28"
+          : "h-10 w-10";
+  const radius = shape === "square" ? "rounded-lg" : "rounded-full";
 
   if (href) {
     return (
@@ -45,7 +57,8 @@ export function ProfileAvatar({
         src={href}
         alt=""
         className={cn(
-          "shrink-0 rounded-full object-cover ring-1 ring-zinc-700",
+          "shrink-0 object-cover ring-1 ring-zinc-700",
+          radius,
           dim,
           className,
         )}
@@ -70,7 +83,8 @@ export function ProfileAvatar({
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-full text-zinc-200 ring-1 ring-zinc-700",
+        "inline-flex shrink-0 items-center justify-center text-zinc-200 ring-1 ring-zinc-700",
+        radius,
         dim,
         fallbackClass,
         className,
@@ -81,7 +95,13 @@ export function ProfileAvatar({
     >
       <Icon
         className={
-          size === "sm" ? "h-4 w-4" : size === "lg" ? "h-8 w-8" : "h-5 w-5"
+          size === "sm"
+            ? "h-4 w-4"
+            : size === "lg"
+              ? "h-8 w-8"
+              : size === "xl"
+                ? "h-14 w-14"
+                : "h-5 w-5"
         }
       />
     </span>

@@ -2,7 +2,8 @@
 
 import { Label } from "@/components/ui/label";
 import { DateRangesFieldEditor } from "@/components/entities/date-ranges-field-editor";
-import { formatProvenanceValidity } from "@/lib/date-range/format";
+import { DateRangesReadonly } from "@/components/entities/date-range-confidence-readonly";
+import { isEmptyDateRanges } from "@/lib/date-range/format";
 import { migrateDateRangesValue } from "@/lib/date-range/migrate";
 import { fieldValueUsesDateRangeData } from "@/lib/date-range/migrate";
 import type { ConfidenceTypeDefinition, Field } from "@/lib/types";
@@ -40,14 +41,23 @@ export function FieldValueValidityEditor({
   );
 }
 
-export function FieldValueValidityReadonly({ field }: { field: Field }) {
+export function FieldValueValidityReadonly({
+  field,
+  confidenceTypes = [],
+}: {
+  field: Field;
+  confidenceTypes?: ConfidenceTypeDefinition[];
+}) {
   if (fieldValueUsesDateRangeData(field.type)) return null;
-  const text = formatProvenanceValidity(field.value.validity);
-  if (!text) return null;
+  const ranges = migrateDateRangesValue(field.value.validity);
+  if (isEmptyDateRanges(ranges)) return null;
   return (
-    <p className="mt-2 text-xs text-zinc-500">
-      <span className="font-medium text-zinc-400">Valid period: </span>
-      {text}
-    </p>
+    <div className="mt-2 space-y-2 text-xs">
+      <DateRangesReadonly
+        ranges={ranges.entries}
+        confidenceTypes={confidenceTypes}
+        labelAfterCertainty="Valid period"
+      />
+    </div>
   );
 }
