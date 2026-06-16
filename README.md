@@ -1,4 +1,4 @@
-# ODIN
+# ODIN - Open Data Network Intelligence
 
 **Local-first OSINT workspace** for organizing people, organizations, domains, and other subjects under investigation.
 
@@ -59,7 +59,7 @@ Open [http://localhost:3000](http://localhost:3000). Browse the **User guide** f
 
 ### Demo data
 
-Populate the workspace with a realistic sample investigation (Operation Glass Desk — credential phishing against a fictional analytics vendor):
+Populate the workspace with a realistic sample investigation (Operation Glass Desk: credential phishing against a fictional analytics vendor):
 
 ```bash
 npm run seed:mock
